@@ -55,7 +55,7 @@ EMBEDDING_DIM = 512
 IMG_SIZE = 224
 BATCH_SIZE = 32
 TOP_K = 5
-NUM_EXAMPLE_IMAGES = 5
+NUM_EXAMPLE_IMAGES = 10
 
 # Device
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -91,9 +91,15 @@ def parse_all_annotations(annotations_dir: Path, testing_dir: Path) -> Tuple[Lis
 
         store_num, image_id = match.groups()
 
-        # Find test image
+        # Find test image (supports both naming formats)
         image_path = None
         for ext in ['.jpg', '.jpeg', '.png', '.JPG', '.JPEG', '.PNG']:
+            # Try with store prefix first (e.g., store1_10.jpg)
+            candidate = testing_dir / f'store{store_num}' / 'images' / f'store{store_num}_{image_id}{ext}'
+            if candidate.exists():
+                image_path = str(candidate)
+                break
+            # Fallback to without prefix (e.g., 10.jpg)
             candidate = testing_dir / f'store{store_num}' / 'images' / f'{image_id}{ext}'
             if candidate.exists():
                 image_path = str(candidate)
@@ -564,7 +570,7 @@ def evaluate_retrieval(
     return metrics, all_results
 
 
-def visualize_results(results: List[Dict], output_dir: Path, num_examples: int = 5):
+def visualize_results(results: List[Dict], output_dir: Path, num_examples: int = NUM_EXAMPLE_IMAGES):
     """Visualize query vs top-5 predictions."""
     output_dir.mkdir(parents=True, exist_ok=True)
     

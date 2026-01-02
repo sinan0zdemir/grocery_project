@@ -1,160 +1,133 @@
 # Grocery Detection & Classification Project
 
-A comprehensive computer vision system for detecting and classifying grocery products using YOLO object detection and deep learning-based product classification.
+A comprehensive computer vision system for detecting and classifying grocery products using YOLO object detection and ArcFace-based product classification.
 
 ## Overview
 
 This project combines two main components:
 - **Detection**: YOLO-based model for detecting grocery products in images
-- **Classification**: Deep learning models (VGG16 with MAC pooling) for fine-grained product classification
+- **Classification**: ArcFace with ResNet-34 backbone for fine-grained product recognition via embedding similarity
 
-The system is designed to work with both studio and in-store grocery product images, supporting hierarchy-based classification across multiple product categories.
+The system is designed to work with the Grocery_products dataset, supporting annotation-based evaluation and cropped query visualization.
 
 ## Project Structure
 
 ```
 grocery_project/
-├── detection/          # YOLO object detection module
-│   ├── best.pt        # Pre-trained YOLO model
-│   ├── inference_yolo.py
-│   ├── crop_products.py
-│   └── detection_output/  # Detection results (CSVs)
-├── classification/     # Product classification module
-│   ├── dihe_pytorch.py    # Classification model (DIHE with VGG16)
-│   ├── dihe_train.py      # Training script
-│   ├── test_dihe.py       # Testing script
-│   └── data/              # Training data
-│       ├── studio/        # Studio product images
-│       └── instore/       # In-store product images
-├── main.py            # Main entry point
-├── pyproject.toml     # Project dependencies
-└── README.md          # This file
+├── detection/
+│   ├── inference/
+│   │   ├── detect_shelf.py          # Detection inference
+│   │   ├── crop_products.py         # Crop detected products
+│   │   ├── detection_inference.py   # Alternative inference script
+│   │   ├── detection_output/        # CSV results
+│   │   └── inference_dataset/       # Test images
+│   ├── eval/
+│   │   ├── eval_yolo11_SKU110K.py   # SKU110K evaluation
+│   │   └── eval_yolo11_grocery.py   # Grocery evaluation
+│   ├── training/
+│   │   └── detection_train_yolov11.ipynb
+│   └── weights/
+│       └── weights_11S_new.pt       # YOLOv11 weights
+├── classification/
+│   ├── training/
+│   │   ├── arcface_grocery_fixed.ipynb
+│   │   └── arcface_grocery_fixed.json
+│   ├── eval/
+│   │   ├── evaluate_arcface.py      # Evaluation script
+│   │   └── outputs/                 # Metrics & visualizations
+│   └── checkpoints/
+│       └── best.pth                 # Trained ArcFace model
+├── datasets/
+│   ├── Grocery_products/
+│   │   ├── Training/                # Reference images
+│   │   ├── Testing/                 # Store images
+│   │   └── Annotations/             # CSV annotations
+│   └── SKU110K/                     # SKU detection dataset
+├── main.py
+├── pyproject.toml
+└── README.md
 ```
 
 ## Features
 
-- **Product Detection**: Localize grocery products in images using YOLO
-- **Product Classification**: Classify detected products across 60+ brands and categories
-- **Multi-Domain Learning**: Handle both studio and in-store images
-- **Hierarchy-based Classification**: Support for macro-categories and fine-grained product classes
-- **Batch Processing**: Process multiple images with CSV output results
+- **Product Detection**: Localize grocery products in shelf images using YOLOv11
+- **ArcFace Classification**: Embedding-based product recognition with cosine similarity
+- **Annotation-based Evaluation**: Uses CSV annotations for ground truth matching
+- **Cropped Query Visualization**: Output images show cropped query products vs top-5 matches
+- **Reference Database Caching**: Pre-computed embeddings saved to `reference_db.pt` for faster re-runs
 
 ## Installation
 
 ### Prerequisites
-- Python 3.12 or higher
-- pip or `uv` (recommended)
+- Python 3.12+
+- CUDA-compatible GPU (recommended)
 
 ### Using `uv` (Fast & Recommended)
 
-[uv](https://github.com/astral-sh/uv) is a fast Python package installer and resolver written in Rust.
-
 ```bash
-# Install uv (if not already installed)
 curl -LsSf https://astral.sh/uv/install.sh | sh
-
-# Create a virtual environment and install dependencies
 uv sync
-
-# Or install specific packages
-uv pip install torch torchvision ultralytics opencv-python
 ```
 
 ### Using pip
 
 ```bash
-# Create a virtual environment
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-
-# Install dependencies
-pip install -r requirements.txt
-
-# Or directly from pyproject.toml
-pip install .
+python -m venv .venv
+source .venv/bin/activate  # Windows: .venv\Scripts\activate
+pip install -e .
 ```
 
 ## Usage
 
 ### 1. Object Detection
 
-Detect grocery products in images:
+```bash
+python detection/inference/detect_shelf.py
+```
+
+### 2. Product Classification (Evaluation)
 
 ```bash
-cd detection/
-python inference_yolo.py
+python classification/eval/evaluate_arcface.py
 ```
 
-**Configuration** (in `inference_yolo.py`):
-- `MODEL_PATH`: Path to YOLO model (default: `./best.pt`)
-- `INPUT_FOLDER`: Directory containing test images
-- `OUTPUT_FOLDER`: Directory for detection results
-- `SCORE_THRESHOLD`: Confidence threshold (0.5 recommended)
+**What it does:**
+1. Parses annotations from `datasets/Grocery_products/Annotations/`
+2. Builds a filtered reference database from Training images (cached to `reference_db.pt`)
+3. Evaluates on test samples using bounding box crops
+4. Outputs Top-1/Top-5 accuracy to `classification/eval/outputs/metrics_fixed.txt`
+5. Generates visualization images with cropped queries vs top-5 predictions
 
-**Output**: CSV files with detected bounding boxes and confidence scores
-
-### 2. Product Classification
-
-Train or test the classification model:
-
-```bash
-# Train the model
-cd classification/
-python dihe_train.py
-
-# Test the model
-python test_dihe.py
+**Expected Output:**
 ```
-
-
-## Dependencies
-
-Key dependencies (see `pyproject.toml` for complete list):
-- `torch` & `torchvision`: Deep learning framework
-- `ultralytics`: YOLO object detection
-- `opencv-python`: Image processing
-- `pandas`: Data handling
-- `numpy`: Numerical computing
-- `pillow`: Image operations
-
-## Dataset
-
-The project expects the following data structure:
-
-```
-data/
-├── studio/        # Controlled environment product images
-│   └── Brand/     # Brand-specific folders
-│       └── product_images.jpg
-└── instore/       # Real store product images
-    └── product_images.jpg
+Top-1 Accuracy: ~81%
+Top-5 Accuracy: ~90%
 ```
 
 ## Model Details
 
 ### Detection Model
-- **Framework**: YOLOv8
-- **Input**: Product images
+- **Framework**: YOLOv11
 - **Output**: Bounding boxes with confidence scores
 
 ### Classification Model
-- **Architecture**: VGG16 with MAC (Maximum Activation of Convolutions) pooling
-- **Features**: 
-  - L2 normalization for feature stability
-  - Hierarchy-aware learning
-  - Domain adaptation for studio vs. in-store images
-- **Classes**: 60+ grocery product brands and categories
+- **Architecture**: ResNet-34 backbone + ArcFace head
+- **Embedding Dim**: 512
+- **Training**: ArcFace loss with Hierarchical Auxiliary Loss (HAL)
+- **Inference**: Cosine similarity against reference embeddings
 
 ## Configuration
 
-Adjust settings in individual scripts:
-- Detection threshold in `detection/inference_yolo.py`
-- Model paths and hyperparameters in `classification/dihe_train.py`
-- Data paths in `main.py`
+Key settings in `classification/eval/evaluate_arcface.py`:
+- `BATCH_SIZE`: 32
+- `TOP_K`: 5 (for top-k accuracy)
+- `NUM_EXAMPLE_IMAGES`: 5 (visualizations to generate)
 
-## Output
+## Output Files
 
-Results are saved as CSV files in `detection/detection_output/`:
-- Bounding box coordinates (x_min, y_min, x_max, y_max)
-- Confidence scores
-- Class predictions
+| File | Description |
+|------|-------------|
+| `classification/eval/outputs/metrics_fixed.txt` | Top-1 and Top-5 accuracy |
+| `classification/eval/outputs/reference_db.pt` | Cached reference embeddings |
+| `classification/eval/outputs/viz_*.png` | Cropped query vs top-5 predictions |
+

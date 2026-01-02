@@ -6,6 +6,9 @@ dist/
 wheels/
 *.egg-info
 
+# Datasets
+datasets/
+
 # Virtual environments
 .venv/
 env/
@@ -33,7 +36,7 @@ htmlcov/
 
 # Jupyter Notebook
 .ipynb_checkpoints/
-*.ipynb
+
 
 # Model & Data files (large files)
 *.pt
@@ -43,17 +46,10 @@ htmlcov/
 *.pickle
 *.joblib
 
-# Media files
-*.jpg
-*.jpeg
-*.png
-*.gif
-*.mp4
-*.avi
-*.mov
+
 
 # Data & Output files
-*.csv
+
 detection_output/
 output_plots/
 snapshots/

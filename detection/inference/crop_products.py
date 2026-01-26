@@ -6,9 +6,9 @@ import numpy as np
 
 # --- CONFIGURATION BASED ON YOUR TREE ---
 # The folder containing t1.csv, t1.jpeg, etc.
-INPUT_FOLDER = 'detection_output' 
-
-# The folder where crops will be saved
+# Get the directory where this script is located
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+INPUT_FOLDER = os.path.join(SCRIPT_DIR, 'detection_output')# The folder where crops will be saved
 OUTPUT_FOLDER = 'products'
 # ----------------------------------------
 

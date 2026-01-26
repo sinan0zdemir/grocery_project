@@ -7,7 +7,8 @@ wheels/
 *.egg-info
 
 # Datasets
-datasets/
+/datasets
+
 # Virtual environments
 .venv/
 env/
@@ -62,3 +63,9 @@ test_results/
 # OS files
 Thumbs.db
 .DS_Store
+
+# Miscellaneous
+*.jpg
+*.jpeg
+*.png
+*.csv

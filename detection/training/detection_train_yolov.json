@@ -1,0 +1,201 @@
+{
+ "cells": [
+  {
+   "cell_type": "markdown",
+   "id": "svVwr4g_Q_H9",
+   "metadata": {},
+   "source": [
+    "# YOLOv11 Training on SKU-110k Dataset\n",
+    "\n",
+    "This notebook trains a YOLOv11 model on the densely packed [SKU-110k dataset](https://docs.ultralytics.com/datasets/detect/sku-110k/) using [Ultralytics](https://docs.ultralytics.com/).\n",
+    "\n",
+    "### Configuration:\n",
+    "* **Model:** YOLOv11s (Small)\n",
+    "* **Epochs:** 50\n",
+    "* **Image Size:** 1024x1024\n",
+    "* **Batch Size:** Auto (`batch=-1`)\n",
+    "* **Checkpointing:** Saves `best.pt` (for overfitting protection) and explicit checkpoints every 5 epochs.\n",
+    "* **Metrics:** AP@0.5, AP@0.75, AP@0.5-0.95, and AR@100 (via `pycocotools`).\n",
+    "\n",
+    "### References:\n",
+    "* [Ultralytics Train Settings](https://docs.ultralytics.com/modes/train/#train-settings)\n",
+    "* [SKU-110k Dataset Docs](https://docs.ultralytics.com/datasets/detect/sku-110k/)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "ue1z0d58Q_H-",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# @title 1. Environment Setup\n",
+    "# Install the ultralytics package\n",
+    "!pip install ultralytics\n",
+    "\n",
+    "# Check GPU status\n",
+    "!nvidia-smi"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "TGFSgpEBQ_H_",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# @title 2. Import and Initialize\n",
+    "import ultralytics\n",
+    "from ultralytics import YOLO\n",
+    "import torch\n",
+    "\n",
+    "# Check Ultralytics version and GPU availability\n",
+    "print(f\"Ultralytics version: {ultralytics.__version__}\")\n",
+    "print(f\"PyTorch version: {torch.__version__}\")\n",
+    "print(f\"CUDA Available: {torch.cuda.is_available()}\")"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "2dwGe4c7Q_H_",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# @title 3. Train YOLOv11\n",
+    "# We use 'yolo11s.pt' (Small)\n",
+    "\n",
+    "# Load the model\n",
+    "model = YOLO('yolo11s.pt')\n",
+    "\n",
+    "# Start Training\n",
+    "# Arguments:\n",
+    "# - data='SKU-110K.yaml': Auto-downloads dataset and configures paths\n",
+    "# - epochs=50\n",
+    "# - imgsz=1024\n",
+    "# - batch=-1: AutoBatch (optimizes batch size for your specific GPU memory)\n",
+    "# - save=True: Ensures 'best.pt' is saved (guards against overfitting by keeping the best performing epoch)\n",
+    "# - save_period=5: Saves a separate checkpoint file every 5 epochs\n",
+    "\n",
+    "results = model.train(\n",
+    "    data='SKU-110K.yaml',\n",
+    "    epochs=50,\n",
+    "    imgsz=1024,\n",
+    "    batch=-1,\n",
+    "    project='sku110k_training',\n",
+    "    name='yolo11_sku_run',\n",
+    "    exist_ok=True,\n",
+    "    plots=True,\n",
+    "    save=True,\n",
+    "    save_period=5,\n",
+    "    patience=5\n",
+    ")"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "Z9g-2zyjWKdk",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "!zip -r /content/file.zip /content/sku110k_training/\n"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "azlK_1r_WbaM",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "from google.colab import files\n",
+    "files.download(\"/content/file.zip\")\n"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "id": "mMSTDPaJQ_H_",
+   "metadata": {},
+   "source": [
+    "### 4. Validation & Metrics\n",
+    "To see the **AR (Average Recall) of top 100**, we run validation with `save_json=True`.\n",
+    "This triggers the standard COCO evaluation protocol, which prints a detailed table including:\n",
+    "* `Average Precision  (AP) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ]`\n",
+    "* `Average Precision  (AP) @[ IoU=0.50      | area=   all | maxDets=100 ]`\n",
+    "* `Average Precision  (AP) @[ IoU=0.75      | area=   all | maxDets=100 ]`\n",
+    "* `Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ]`"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "6CsBgYFZQ_IA",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# @title Run Full Validation\n",
+    "\n",
+    "# Load the best model from the training run\n",
+    "best_model = YOLO('sku110k_training/yolo11_sku_run/weights/best.pt')\n",
+    "\n",
+    "# Validate\n",
+    "# save_json=True is CRITICAL to get the AR@100 metric printed in the pycocotools table\n",
+    "metrics = best_model.val(data='SKU-110K.yaml', split='test', save_json=True)\n",
+    "\n",
+    "# Print standard YOLO metrics (AP50, AP50-95)\n",
+    "print(\"\\n--- Standard Ultralytics Metrics ---\")\n",
+    "print(f\"mAP@0.5: {metrics.box.map50:.4f}\")\n",
+    "print(f\"mAP@0.75: {metrics.box.map75:.4f}\")\n",
+    "print(f\"mAP@0.5-0.95: {metrics.box.map:.4f}\")"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "6UAtmzjhQ_IA",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# @title Display Training Graphs\n",
+    "from IPython.display import Image, display\n",
+    "import os\n",
+    "\n",
+    "# Path to the results directory\n",
+    "results_dir = 'sku110k_training/yolo11_sku_run'\n",
+    "\n",
+    "# Display results.png if it exists (Summary of losses and metrics)\n",
+    "results_img = os.path.join(results_dir, 'results.png')\n",
+    "if os.path.exists(results_img):\n",
+    "    display(Image(filename=results_img))\n",
+    "else:\n",
+    "    print(\"Results image not found.\")"
+   ]
+  }
+ ],
+ "metadata": {
+  "accelerator": "GPU",
+  "colab": {
+   "gpuType": "L4",
+   "machine_shape": "hm",
+   "provenance": []
+  },
+  "kernelspec": {
+   "display_name": "Python 3",
+   "name": "python3"
+  },
+  "language_info": {
+   "codemirror_mode": {
+    "name": "ipython",
+    "version": 3
+   },
+   "file_extension": ".py",
+   "mimetype": "text/x-python",
+   "name": "python",
+   "nbconvert_exporter": "python",
+   "pygments_lexer": "ipython3"
+  }
+ },
+ "nbformat": 4,
+ "nbformat_minor": 5
+}

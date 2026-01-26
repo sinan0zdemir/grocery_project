@@ -1,187 +1,256 @@
 """
-Embedding Visualization Script
+t-SNE Embedding Visualization for HAL (Hierarchical Auxiliary Learning)
 
-Visualizes the reference database embeddings using UMAP dimensionality reduction.
-Creates an interactive plot with category-based coloring.
+This script generates a t-SNE visualization showing clusters of products
+grouped by category, demonstrating the semantic organization provided by HAL.
 
-Usage:
-    python visualize_embeddings.py [--db-path PATH] [--output PATH]
+Visualizes reference_db.pt from eval/outputs directory.
 """
 
-import argparse
+import os
 from pathlib import Path
-from collections import defaultdict
+from typing import Dict, List, Tuple
 
-import torch
 import numpy as np
+import torch
 import matplotlib.pyplot as plt
-import umap
+from sklearn.manifold import TSNE
+import matplotlib.patches as mpatches
 
+
+# =============================================================================
 # Configuration
+# =============================================================================
 SCRIPT_DIR = Path(__file__).parent
-DEFAULT_DB_PATH = SCRIPT_DIR / "outputs" / "reference_db.pt"
-DEFAULT_OUTPUT = SCRIPT_DIR / "outputs" / "embeddings_visualization.png"
+OUTPUT_DIR = SCRIPT_DIR / "outputs"
+REFERENCE_DB_PATH = OUTPUT_DIR / "reference_db.pt"
+
+# t-SNE parameters
+TSNE_PERPLEXITY = 30
+TSNE_N_ITER = 1000
+TSNE_RANDOM_STATE = 42
+
+# Visualization parameters
+FIGURE_SIZE = (10, 8)
+POINT_SIZE = 50
+ALPHA = 1.0
 
 
-def extract_category(class_name: str, level: int = -2) -> str:
+# =============================================================================
+# Helper Functions
+# =============================================================================
+def extract_category(class_name: str) -> str:
     """
-    Extract category from class path.
-    
-    Args:
-        class_name: Full path like 'Food/Rice/12.jpg'
-        level: Which level to extract:
-            0 = top-level (e.g., 'Food')
-            -2 = leaf category (e.g., 'Rice')
-            -1 = product name (e.g., '12')
+    Extract leaf category (parent folder of the image file) from class name.
+    Example: 'Food/Rice/product.jpg' -> 'Rice'
     """
     parts = class_name.replace('\\', '/').split('/')
-    # Remove file extension from last part
-    if parts and '.' in parts[-1]:
-        parts[-1] = parts[-1].rsplit('.', 1)[0]
+    # Get the parent folder of the image file (leaf category)
+    if len(parts) >= 2:
+        return parts[-2]  # Parent folder of the file
+    return 'Unknown'
+
+
+def get_color_palette(num_colors: int) -> List[str]:
+    """Generate a visually distinct color palette."""
+    # Use a perceptually uniform colormap
+    cmap = plt.cm.get_cmap('tab20', min(20, num_colors))
+    colors = [cmap(i) for i in range(min(20, num_colors))]
     
-    if len(parts) >= abs(level):
-        return parts[level]
-    return parts[0] if parts else 'Unknown'
+    # If more than 20 categories, extend with another colormap
+    if num_colors > 20:
+        cmap2 = plt.cm.get_cmap('Set3', 12)
+        colors.extend([cmap2(i) for i in range(min(12, num_colors - 20))])
+    
+    if num_colors > 32:
+        cmap3 = plt.cm.get_cmap('Pastel1', 9)
+        colors.extend([cmap3(i) for i in range(num_colors - 32)])
+    
+    return colors[:num_colors]
 
 
-def load_reference_db(db_path: Path) -> dict:
-    """Load the reference database."""
-    print(f"📂 Loading reference database from: {db_path}")
-    data = torch.load(db_path, map_location='cpu', weights_only=False)
+def load_reference_db(path: Path) -> Tuple[np.ndarray, List[str], List[str]]:
+    """Load reference database containing embeddings and metadata."""
+    print(f"Loading reference database from {path}...")
+    
+    if not path.exists():
+        raise FileNotFoundError(f"Reference database not found: {path}")
+    
+    data = torch.load(path, map_location='cpu', weights_only=False)
     
     embeddings = data['embeddings']
+    class_names = data['class_names']
+    paths = data.get('paths', [])
+    
+    # Convert to numpy if tensor
     if isinstance(embeddings, torch.Tensor):
         embeddings = embeddings.numpy()
     
-    class_names = data['class_names']
+    print(f"  Loaded {len(embeddings)} embeddings")
+    print(f"  Embedding dimension: {embeddings.shape[1]}")
     
-    print(f"   ✅ Loaded {len(embeddings)} embeddings with {embeddings.shape[1]} dimensions")
-    return {
-        'embeddings': embeddings,
-        'class_names': class_names,
-        'labels': data.get('labels', list(range(len(class_names)))),
-        'paths': data.get('paths', [])
-    }
+    return embeddings, class_names, paths
 
 
-def visualize_embeddings(
-    embeddings: np.ndarray,
-    class_names: list,
-    output_path: Path,
-    n_neighbors: int = 15,
-    min_dist: float = 0.1,
-    random_state: int = 42
-):
-    """Create UMAP visualization with category coloring."""
+def compute_tsne(embeddings: np.ndarray, perplexity: int = TSNE_PERPLEXITY, 
+                 n_iter: int = TSNE_N_ITER, random_state: int = TSNE_RANDOM_STATE) -> np.ndarray:
+    """Compute t-SNE dimensionality reduction."""
+    print(f"Computing t-SNE (perplexity={perplexity}, n_iter={n_iter})...")
     
-    # Extract categories
-    categories = [extract_category(name) for name in class_names]
-    unique_categories = sorted(set(categories))
-    category_to_idx = {cat: idx for idx, cat in enumerate(unique_categories)}
-    category_indices = [category_to_idx[cat] for cat in categories]
+    # Adjust perplexity if necessary
+    n_samples = embeddings.shape[0]
+    actual_perplexity = min(perplexity, (n_samples - 1) // 3)
+    if actual_perplexity != perplexity:
+        print(f"  Adjusted perplexity to {actual_perplexity} for {n_samples} samples")
     
-    print(f"\n📊 Found {len(unique_categories)} categories:")
-    category_counts = defaultdict(int)
-    for cat in categories:
-        category_counts[cat] += 1
-    for cat in sorted(category_counts.keys()):
-        print(f"   • {cat}: {category_counts[cat]} samples")
-    
-    # Compute UMAP
-    print(f"\n🔄 Computing UMAP projection (n_neighbors={n_neighbors}, min_dist={min_dist})...")
-    reducer = umap.UMAP(
+    tsne = TSNE(
         n_components=2,
-        n_neighbors=n_neighbors,
-        min_dist=min_dist,
+        perplexity=actual_perplexity,
+        max_iter=n_iter,
         random_state=random_state,
-        verbose=True
+        learning_rate='auto',
+        init='pca'
     )
-    embeddings_2d = reducer.fit_transform(embeddings)
     
-    # Create figure
-    print("\n🎨 Creating visualization...")
-    fig, ax = plt.subplots(figsize=(14, 10))
-    
-    # Use a colormap with enough colors
-    cmap = plt.cm.get_cmap('tab20' if len(unique_categories) <= 20 else 'nipy_spectral')
-    
-    # Plot each category
-    for idx, category in enumerate(unique_categories):
-        mask = np.array(categories) == category
-        color = cmap(idx / len(unique_categories))
-        ax.scatter(
-            embeddings_2d[mask, 0],
-            embeddings_2d[mask, 1],
-            c=[color],
-            label=f"{category} ({mask.sum()})",
-            s=15,
-            alpha=0.7
-        )
-    
-    # Styling
-    ax.set_title("Reference Database Embeddings (UMAP Projection)", fontsize=14, fontweight='bold')
-    ax.set_xlabel("UMAP Dimension 1")
-    ax.set_ylabel("UMAP Dimension 2")
-    
-    # Legend (outside plot if many categories)
-    if len(unique_categories) > 10:
-        ax.legend(
-            bbox_to_anchor=(1.02, 1),
-            loc='upper left',
-            fontsize=8,
-            markerscale=1.5
-        )
-        plt.tight_layout(rect=[0, 0, 0.85, 1])
-    else:
-        ax.legend(loc='best', fontsize=9, markerscale=1.5)
-        plt.tight_layout()
-    
-    # Save
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    plt.savefig(output_path, dpi=150, bbox_inches='tight')
-    plt.savefig(output_path.with_suffix('.svg'), bbox_inches='tight')  # Also save as SVG
-    print(f"\n✅ Saved visualization to: {output_path}")
-    print(f"✅ Saved SVG to: {output_path.with_suffix('.svg')}")
-    
-    plt.show()
+    embeddings_2d = tsne.fit_transform(embeddings)
+    print(f"  t-SNE complete. Output shape: {embeddings_2d.shape}")
     
     return embeddings_2d
 
 
-def main():
-    parser = argparse.ArgumentParser(description="Visualize embedding database")
-    parser.add_argument("--db-path", type=str, default=str(DEFAULT_DB_PATH),
-                        help="Path to reference_db.pt file")
-    parser.add_argument("--output", type=str, default=str(DEFAULT_OUTPUT),
-                        help="Output image path")
-    parser.add_argument("--n-neighbors", type=int, default=15,
-                        help="UMAP n_neighbors parameter")
-    parser.add_argument("--min-dist", type=float, default=0.1,
-                        help="UMAP min_dist parameter")
-    args = parser.parse_args()
+def create_visualization(
+    embeddings_2d: np.ndarray,
+    categories: List[str],
+    category_to_idx: Dict[str, int],
+    output_path: Path,
+    title: str = "t-SNE Visualization of Product Embeddings by Category"
+) -> None:
+    """Create and save t-SNE visualization."""
+    print(f"Creating visualization...")
     
-    print("=" * 60)
-    print("Embedding Visualization")
-    print("=" * 60)
+    fig, ax = plt.subplots(figsize=FIGURE_SIZE, facecolor='white')
     
-    # Load data
-    db_path = Path(args.db_path)
-    if not db_path.exists():
-        print(f"❌ Database not found: {db_path}")
-        return
+    # Get unique categories and colors
+    unique_categories = sorted(category_to_idx.keys())
+    num_categories = len(unique_categories)
+    colors = get_color_palette(num_categories)
+    category_colors = {cat: colors[i] for i, cat in enumerate(unique_categories)}
     
-    data = load_reference_db(db_path)
+    # Create color array for all points
+    point_colors = [category_colors[cat] for cat in categories]
     
-    # Visualize
-    visualize_embeddings(
-        data['embeddings'],
-        data['class_names'],
-        Path(args.output),
-        n_neighbors=args.n_neighbors,
-        min_dist=args.min_dist
+    # Scatter plot
+    scatter = ax.scatter(
+        embeddings_2d[:, 0],
+        embeddings_2d[:, 1],
+        c=point_colors,
+        s=POINT_SIZE,
+        alpha=ALPHA,
+        edgecolors='white',
+        linewidths=0.3
     )
     
-    print("\n🎉 Done!")
+    # Create legend
+    legend_handles = [
+        mpatches.Patch(color=category_colors[cat], label=f"{cat} ({sum(1 for c in categories if c == cat)})")
+        for cat in unique_categories
+    ]
+    
+    # Position legend outside plot
+    ax.legend(
+        handles=legend_handles,
+        loc='center left',
+        bbox_to_anchor=(1.02, 0.5),
+        fontsize=8,
+        title='Categories',
+        title_fontsize=10,
+        framealpha=0.9
+    )
+    
+    # Styling
+    ax.set_title(title, fontsize=14, fontweight='bold', pad=15)
+    ax.set_xlabel('t-SNE Dimension 1', fontsize=11)
+    ax.set_ylabel('t-SNE Dimension 2', fontsize=11)
+    
+    # Remove spines for cleaner look
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+    ax.spines['left'].set_alpha(0.3)
+    ax.spines['bottom'].set_alpha(0.3)
+    
+    ax.tick_params(axis='both', which='both', length=0, labelsize=9)
+    ax.grid(True, alpha=0.2, linestyle='--')
+    
+    # Add annotation
+    textstr = f'Total samples: {len(categories)}\nCategories: {num_categories}'
+    props = dict(boxstyle='round,pad=0.5', facecolor='white', alpha=0.8, edgecolor='gray')
+    ax.text(0.02, 0.98, textstr, transform=ax.transAxes, fontsize=9,
+            verticalalignment='top', bbox=props)
+    
+    plt.tight_layout()
+    
+    # Save as PNG and SVG
+    png_path = output_path.with_suffix('.png')
+    svg_path = output_path.with_suffix('.svg')
+    
+    plt.savefig(png_path, dpi=150, bbox_inches='tight', facecolor='white')
+    plt.savefig(svg_path, bbox_inches='tight', facecolor='white')
+    plt.close()
+    
+    print(f"  Saved: {png_path}")
+    print(f"  Saved: {svg_path}")
+
+
+def print_category_stats(categories: List[str], category_to_idx: Dict[str, int]) -> None:
+    """Print statistics about category distribution."""
+    print("\nCategory Distribution:")
+    print("-" * 40)
+    
+    category_counts = {}
+    for cat in categories:
+        category_counts[cat] = category_counts.get(cat, 0) + 1
+    
+    for cat in sorted(category_counts.keys()):
+        print(f"  {cat}: {category_counts[cat]} samples")
+    
+    print("-" * 40)
+    print(f"  Total: {len(categories)} samples in {len(category_counts)} categories")
+
+
+def main():
+    """Main function to generate t-SNE visualization."""
+    print("=" * 60)
+    print("t-SNE Embedding Visualization for HAL")
+    print("=" * 60)
+    
+    # Load reference database
+    embeddings, class_names, paths = load_reference_db(REFERENCE_DB_PATH)
+    
+    # Extract categories from class names
+    categories = [extract_category(cn) for cn in class_names]
+    
+    # Build category mapping
+    unique_categories = sorted(set(categories))
+    category_to_idx = {cat: idx for idx, cat in enumerate(unique_categories)}
+    
+    print_category_stats(categories, category_to_idx)
+    
+    # Compute t-SNE
+    embeddings_2d = compute_tsne(embeddings)
+    
+    # Create visualization
+    output_path = OUTPUT_DIR / "tsne_by_category"
+    create_visualization(
+        embeddings_2d,
+        categories,
+        category_to_idx,
+        output_path,
+        title="t-SNE: Product Embeddings Clustered by Category (HAL)"
+    )
+    
+    print("\n" + "=" * 60)
+    print("Visualization complete!")
+    print("=" * 60)
 
 
 if __name__ == "__main__":

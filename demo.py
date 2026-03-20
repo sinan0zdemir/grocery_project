@@ -33,6 +33,10 @@ from tqdm import tqdm
 # --- YOLOv11 IMPORT ---
 from ultralytics import YOLO
 
+# --- PLANOGRAM IMPORT ---
+sys.path.insert(0, str(Path(__file__).parent))
+from planogram.planogram import generate_planogram, detect_shelf_lines, assign_shelves, print_planogram_summary
+
 # --- CONFIGURATION ---
 SCRIPT_DIR = Path(__file__).parent
 DETECTION_WEIGHTS = SCRIPT_DIR / "detection" / "weights" / "weights_11S_new.pt"
@@ -370,6 +374,10 @@ def main():
                         help='Output folder (default: demo_output)')
     parser.add_argument('--conf', type=float, default=0.25,
                         help='Detection confidence threshold')
+    parser.add_argument('--planogram', action='store_true',
+                        help='Generate planogram after processing each image')
+    parser.add_argument('--show-images', action='store_true',
+                        help='Render product crops inside planogram cells (requires --planogram)')
     args = parser.parse_args()
     
     conf_threshold = args.conf
@@ -438,6 +446,25 @@ def main():
         all_timings.append(timing)
         if not df.empty:
             all_results.append(df)
+
+            # Generate planogram for this image if requested
+            if args.planogram:
+                img = cv2.imread(img_path)
+                img_h, img_w = img.shape[:2] if img is not None else (0, 0)
+                base_name = os.path.splitext(os.path.basename(img_path))[0]
+                plano_path = str(output_folder / f"{base_name}_planogram.png")
+                print(f"  Generating planogram...")
+                import matplotlib
+                matplotlib.use('Agg')
+                import matplotlib.pyplot as plt
+                fig = generate_planogram(
+                    df, img_h, img_w,
+                    image_path=img_path,
+                    output_path=plano_path,
+                    show_images=args.show_images,
+                    title=f"Planogram — {base_name}",
+                )
+                plt.close(fig)
     
     total_pipeline_time = time.time() - total_start
     

@@ -49,7 +49,8 @@ htmlcov/
 
 
 # Data & Output files
-
+demo_output/
+planogram_output/
 detection_output/
 output_plots/
 snapshots/

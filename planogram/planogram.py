@@ -201,6 +201,13 @@ def generate_planogram(
         if orig_img is None:
             print(f"  [WARNING] Could not load image: {image_path}")
 
+    # Orantılı görsel için x/y data birimlerinin fiziksel piksel karşılığı
+    # x: 0..img_w data birimi = PLANOGRAM_WIDTH_INCHES inç
+    # y: 0..1 data birimi (1 raf satırı) = ROW_HEIGHT_INCHES inç
+    _DPI = 150
+    _px_per_x = PLANOGRAM_WIDTH_INCHES * _DPI / max(img_w, 1)
+    _px_per_y = ROW_HEIGHT_INCHES * _DPI
+
     # --- 3. Build color map ---
     class_colors: Dict[str, Tuple[float, float, float]] = {}
     for cls in df_shelved['predicted_class'].unique():
@@ -252,15 +259,26 @@ def generate_planogram(
             cell_y = row_idx + 0.04       # small top padding
             cell_h = 0.92                 # full row height minus padding
 
-            # Render crop image inside cell (optional)
+            # Render crop image inside cell (optional) — orantılı boyutlandırma
             if show_images and orig_img is not None:
                 crop = orig_img[y1:y2, x1:x2]
                 if crop.size > 0:
                     crop_rgb = cv2.cvtColor(crop, cv2.COLOR_BGR2RGB)
+                    ih, iw = crop_rgb.shape[:2]
+                    # Hücre boyutlarını fiziksel piksele çevir
+                    max_w_px = cell_w * _px_per_x
+                    max_h_px = cell_h * _px_per_y
+                    # En-boy oranını koruyarak her iki boyuta da sığdır
+                    scale = min(max_w_px / iw, max_h_px / ih)
+                    disp_w = iw * scale / _px_per_x  # data birimine çevir
+                    disp_h = ih * scale / _px_per_y
+                    # Hücrede ortala
+                    cx = cell_x + cell_w / 2
+                    cy = cell_y + cell_h / 2
                     ax.imshow(
                         crop_rgb,
-                        extent=[cell_x, cell_x + cell_w,
-                                cell_y + cell_h, cell_y],
+                        extent=[cx - disp_w/2, cx + disp_w/2,
+                                cy + disp_h/2, cy - disp_h/2],
                         aspect='auto', zorder=2
                     )
 
@@ -276,17 +294,18 @@ def generate_planogram(
             )
             ax.add_patch(rect)
 
-            # Product label
-            label = f"{cls}\n{conf:.2f}"
+            # Product label — sadece ürün adının son parçası (kategori yok)
+            short_id = Path(cls).stem[:12]
             ax.text(
                 cell_x + cell_w / 2,
-                cell_y + cell_h / 2,
-                label,
+                cell_y + cell_h * 0.88,
+                short_id,
                 ha='center', va='center',
                 fontsize=LABEL_FONT_SIZE,
                 fontweight='bold',
-                color='black',
-                zorder=4,
+                color='white',
+                bbox=dict(boxstyle='round,pad=0.1', facecolor='black', alpha=0.55, linewidth=0),
+                zorder=5,
                 clip_on=True
             )
 

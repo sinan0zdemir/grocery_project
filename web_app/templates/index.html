@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Planogram AI Dashboard</title>
+    
+    <!-- Google Fonts: Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="logo">
+                <i data-lucide="scan-line" class="logo-icon"></i>
+                <h2>PlanoAI</h2>
+            </div>
+            
+            <nav class="nav-menu">
+                <a href="#" class="nav-item active">
+                    <i data-lucide="layout-dashboard"></i>
+                    <span>Dashboard</span>
+                </a>
+                <a href="#" class="nav-item">
+                    <i data-lucide="map"></i>
+                    <span>Planograms</span>
+                </a>
+                <a href="#" class="nav-item">
+                    <i data-lucide="history"></i>
+                    <span>History</span>
+                </a>
+                <a href="#" class="nav-item">
+                    <i data-lucide="settings"></i>
+                    <span>Settings</span>
+                </a>
+            </nav>
+            
+            <div class="sidebar-footer">
+                <p>v1.0.0 Beta</p>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <header class="header">
+                <div class="header-titles">
+                    <h1>Shelf Analysis</h1>
+                    <p>Upload a store shelf photo to verify planogram compliance.</p>
+                </div>
+                <div class="user-profile">
+                    <div class="avatar">
+                        <i data-lucide="user"></i>
+                    </div>
+                </div>
+            </header>
+
+            <div class="content-grid">
+                <!-- Upload Section -->
+                <section class="upload-section card glassmorphism">
+                    <div class="upload-area" id="drop-zone">
+                        <div class="upload-content">
+                            <div class="upload-icon">
+                                <i data-lucide="upload-cloud"></i>
+                            </div>
+                            <h3>Drag & drop your shelf image here</h3>
+                            <p>or click to browse your files (JPG, PNG)</p>
+                            <input type="file" id="file-input" accept="image/jpeg, image/png, image/jpg" hidden>
+                            <button class="btn btn-primary" id="browse-btn">Select Image</button>
+                        </div>
+                        <div class="preview-container hidden" id="preview-container">
+                            <img id="image-preview" src="" alt="Shelf Preview">
+                            <div class="preview-overlay">
+                                <button class="btn btn-icon" id="remove-img-btn" title="Remove"><i data-lucide="x"></i></button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="action-bar">
+                        <button class="btn btn-success btn-large" id="analyze-btn" disabled>
+                            <i data-lucide="zap"></i>
+                            Analyze Shelf
+                        </button>
+                    </div>
+                </section>
+
+                <!-- Results Section (Initially hidden or skeleton) -->
+                <section class="results-section card hidden" id="results-section">
+                    <div class="results-header">
+                        <h2>Analysis Results</h2>
+                        <span class="badge score-badge" id="score-badge">--% Match</span>
+                    </div>
+                    
+                    <div class="metrics-grid">
+                        <div class="metric-card info" onclick="filterIssues('all')" style="cursor: pointer;" title="Tüm Ürünleri Göster">
+                            <div class="metric-icon"><i data-lucide="package"></i></div>
+                            <div class="metric-data">
+                                <span class="metric-value" id="total-items">0</span>
+                                <span class="metric-label">Total Items</span>
+                            </div>
+                        </div>
+                        <div class="metric-card warning" onclick="filterIssues('misplaced')" style="cursor: pointer;" title="Yanlış Yerleştirilenleri Göster">
+                            <div class="metric-icon"><i data-lucide="alert-triangle"></i></div>
+                            <div class="metric-data">
+                                <span class="metric-value" id="misplaced-items">0</span>
+                                <span class="metric-label">Misplaced</span>
+                            </div>
+                        </div>
+                        <div class="metric-card danger" onclick="filterIssues('missing')" style="cursor: pointer;" title="Eksik Ürünleri Göster">
+                            <div class="metric-icon"><i data-lucide="file-minus-2"></i></div>
+                            <div class="metric-data">
+                                <span class="metric-value" id="missing-items">0</span>
+                                <span class="metric-label">Missing</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="report-list">
+                        <h3>Detailed Report</h3>
+                        <ul class="issue-list" id="issue-list">
+                            <!-- Dynamic items will be injected here -->
+                            <li class="empty-state">Run analysis to see detailed issues.</li>
+                        </ul>
+                    </div>
+                </section>
+            </div>
+            
+            <!-- Loading Modal -->
+            <div class="loading-overlay hidden" id="loading-overlay">
+                <div class="loader-card glassmorphism">
+                    <div class="spinner"></div>
+                    <h3>AI is analyzing...</h3>
+                    <p>Running YOLO Detection & ArcFace Classification</p>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="/static/js/main.js"></script>
+    <script>
+        lucide.createIcons();
+    </script>
+</body>
+</html>

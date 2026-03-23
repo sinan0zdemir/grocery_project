@@ -51,8 +51,8 @@ from planogram import generate_planogram
 # --- CONFIGURATION ---
 SCRIPT_DIR = Path(__file__).parent
 DETECTION_WEIGHTS       = SCRIPT_DIR / "detection" / "weights" / "weights_11S_new.pt"
-CLASSIFICATION_CHECKPOINT = SCRIPT_DIR / "classification" / "checkpoints" / "best_2.pth"
-REFERENCE_DB_PATH       = SCRIPT_DIR / "classification" / "eval" / "outputs" / "reference_db_migros.pt"
+CLASSIFICATION_CHECKPOINT = SCRIPT_DIR / "classification" / "checkpoints" / "augmented_resnet50_arcface.pth"
+REFERENCE_DB_PATH       = SCRIPT_DIR / "classification" / "eval" / "outputs" / "reference_db_new.pt"
 OUTPUT_FOLDER           = SCRIPT_DIR / "demo_output"
 
 FONT_PATH = "/System/Library/Fonts/Supplemental/Arial Unicode.ttf"
@@ -71,60 +71,18 @@ pathlib.PosixPath = pathlib.WindowsPath
 
 
 # =============================================================================
-# ArcFace Model Architecture
+# Model Architecture (Compatible with Google Colab Augmented Weights)
 # =============================================================================
-class ArcFaceHead(nn.Module):
-    def __init__(self, in_features, num_classes, scale=64.0, margin=0.5):
-        super().__init__()
-        self.scale = scale
-        self.margin = margin
-        self.num_classes = num_classes
-        self.weight = nn.Parameter(torch.FloatTensor(num_classes, in_features))
-        nn.init.xavier_uniform_(self.weight)
-        self.current_margin = 0.0
-
-    def set_margin(self, margin):
-        self.current_margin = min(margin, self.margin)
-
-    def forward(self, embeddings, labels):
-        return embeddings
-
-    def get_proxies(self):
-        return F.normalize(self.weight, dim=1)
-
-
-class HALHead(nn.Module):
-    def __init__(self, class_to_category, category_to_idx, scale=64.0):
-        super().__init__()
-        self.scale = scale
-        self.num_categories = len(category_to_idx)
-
-    def forward(self, embeddings, cat_labels, class_proxies, class_to_idx):
-        return None
-
-
 class ProductRecognitionModel(nn.Module):
-    def __init__(self, num_classes, num_categories, class_to_category, category_to_idx,
-                 class_to_idx, embedding_dim=512, scale=64.0, margin=0.5):
+    def __init__(self):
         super().__init__()
-        resnet = models.resnet34(weights=None)
-        self.backbone = nn.Sequential(*list(resnet.children())[:-1])
-        self.embedding = nn.Sequential(
-            nn.Linear(512, embedding_dim),
-            nn.BatchNorm1d(embedding_dim)
-        )
-        self.arcface = ArcFaceHead(embedding_dim, num_classes, scale, margin)
-        self.hal = HALHead(class_to_category, category_to_idx, scale)
-        self.class_to_idx = class_to_idx
-        self.embedding_dim = embedding_dim
+        from torchvision.models import resnet50
+        self.backbone = resnet50(weights=None)
+        self.backbone.fc = nn.Linear(self.backbone.fc.in_features, 512)
 
     def get_embeddings(self, x):
-        features = self.backbone(x).flatten(1)
-        embeddings = self.embedding(features)
+        embeddings = self.backbone(x)
         return F.normalize(embeddings, dim=1)
-
-    def forward(self, x, class_labels=None, cat_labels=None, compute_hal=True):
-        return self.get_embeddings(x)
 
 
 # =============================================================================
@@ -161,20 +119,11 @@ def load_classification_model(checkpoint_path: Path, ref_db_path: Path):
     category_to_idx = {cat: idx for idx, cat in enumerate(sorted(categories))}
 
     print(f"Loading classification model from {checkpoint_path}...")
-    model = ProductRecognitionModel(
-        num_classes=len(class_to_idx),
-        num_categories=len(category_to_idx),
-        class_to_category=class_to_category,
-        category_to_idx=category_to_idx,
-        class_to_idx=class_to_idx,
-        embedding_dim=EMBEDDING_DIM
-    ).to(DEVICE)
+    model = ProductRecognitionModel().to(DEVICE)
 
     try:
         checkpoint = torch.load(checkpoint_path, map_location=DEVICE, weights_only=False)
-        state_dict = checkpoint['model_state_dict'] if isinstance(checkpoint, dict) and 'model_state_dict' in checkpoint else checkpoint
-        filtered = {k: v for k, v in state_dict.items() if k.startswith('backbone.') or k.startswith('embedding.')}
-        model.load_state_dict(filtered, strict=False)
+        model.backbone.load_state_dict(checkpoint, strict=True)
         model.eval()
     except Exception as e:
         print(f"[WARNING] Could not load checkpoint: {e}")

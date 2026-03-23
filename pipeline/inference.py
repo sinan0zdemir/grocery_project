@@ -8,7 +8,7 @@ sys.path.insert(0, str(ROOT_DIR))
 
 from demo import load_classification_model, run_detection, process_image, YOLO, CLASSIFICATION_CHECKPOINT, REFERENCE_DB_PATH, DETECTION_WEIGHTS
 from planogram import detect_shelf_lines, assign_shelves
-from comparator import compare_shelves, load_schema
+from comparator import compare_shelves, load_schema, evaluate_hybrid_shelves, generate_schema_from_df
 import pandas as pd
 
 import urllib.request
@@ -94,25 +94,47 @@ def run_analysis(image_path: str, schemas_dir: str, output_folder: Path) -> dict
         name = global_mapping.get(cls_str, "Ürün")
         return f"{name} ({cls_str})"
     df['predicted_class'] = df['predicted_class'].apply(map_from_csv)
+    
+    # Agnostic NMS to remove overlapping duplicate detections
+    def compute_iou(row1, row2):
+        x_left = max(row1['x1'], row2['x1'])
+        y_top = max(row1['y1'], row2['y1'])
+        x_right = min(row1['x2'], row2['x2'])
+        y_bottom = min(row1['y2'], row2['y2'])
+        if x_right < x_left or y_bottom < y_top: return 0.0
+        intersection = (x_right - x_left) * (y_bottom - y_top)
+        area1 = (row1['x2'] - row1['x1']) * (row1['y2'] - row1['y1'])
+        area2 = (row2['x2'] - row2['x1']) * (row2['y2'] - row2['y1'])
+        return intersection / float(area1 + area2 - intersection)
+        
+    if 'class_confidence' in df.columns:
+        df = df.sort_values('class_confidence', ascending=False).reset_index(drop=True)
+        
+    keep_indices = []
+    for i in range(len(df)):
+        keep = True
+        for j in keep_indices:
+            if compute_iou(df.iloc[i], df.iloc[j]) > 0.6:
+                keep = False
+                break
+        if keep: keep_indices.append(i)
+    df = df.iloc[keep_indices].reset_index(drop=True)
         
     # 3. Planogram grouping
-    img_h = 2000 # dummy default, normally process_image has access to it but returns only df. We can estimate.
-    # We will estimate img_h from df y2 max
     img_h = int(df['y2'].max()) + 50
     shelf_lines = detect_shelf_lines(df, img_h)
     df_shelved = assign_shelves(df, shelf_lines)
     
-    # 4. JSON Compare against all schemas to find the best match
-    best_results = None
-    best_score = -1
-    
-    for schema in schemas:
-        results = compare_shelves(df_shelved, schema)
-        if results.get("category_score", 0) > best_score:
-            best_score = results.get("category_score", 0)
-            best_results = results
+    # 4. Evaluate using Hybrid Logic (Golden Image + Heuristics)
+    golden_schema_path = Path(schemas_dir) / "golden_schema.json"
+    expected_schema = None
+    if golden_schema_path.exists():
+        try:
+            expected_schema = load_schema(str(golden_schema_path))
+        except Exception as e:
+            print(f"Error loading golden schema: {e}")
             
-    results = best_results if best_results is not None else compare_shelves(df_shelved, schemas[0])
+    results = evaluate_hybrid_shelves(df_shelved, expected_schema)
     
     # 5. Visual Compliance Overlay
     import cv2
@@ -124,18 +146,17 @@ def run_analysis(image_path: str, schemas_dir: str, output_folder: Path) -> dict
 
         for item in results.get("misplaced_items", []):
             b = item.get("bbox")
-            if b: cv2.rectangle(img, (b["x1"], b["y1"]), (b["x2"], b["y2"]), (0, 165, 255), 4)
-
-        for item in results.get("unexpected_items", []):
-            b = item.get("bbox")
             if b: cv2.rectangle(img, (b["x1"], b["y1"]), (b["x2"], b["y2"]), (0, 0, 255), 4)
 
-        # Draw purple rectangles for physical gaps (empty spaces)
+        for item in results.get("unexpected_items", []):
+            pass
+
+        # Draw yellow rectangles for physical gaps (empty spaces)
         for item in results.get("gap_detections", []):
             b = item.get("bbox")
             if b:
-                cv2.rectangle(img, (b["x1"], b["y1"]), (b["x2"], b["y2"]), (255, 0, 255), 4)
-                cv2.putText(img, "BOS", (b["x1"]+5, b["y1"]+25), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 0, 255), 2)
+                cv2.rectangle(img, (b["x1"], b["y1"]), (b["x2"], b["y2"]), (0, 255, 255), 4)
+                cv2.putText(img, "BOS", (b["x1"]+5, b["y1"]+25), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
             
         base_name = Path(image_path).stem
         out_path = plan_folder / f"{base_name}_compliance.jpg"
@@ -148,3 +169,84 @@ def run_analysis(image_path: str, schemas_dir: str, output_folder: Path) -> dict
     results['message'] = "Analysis completed successfully."
     
     return results
+
+def set_reference_image(image_path: str, schemas_dir: str, output_folder: Path) -> dict:
+    """Processes an image and saves the exact detected layout as the Golden Image."""
+    initialize_models()
+    
+    cls_folder = output_folder / "classification"
+    det_folder = output_folder / "detection"
+    plan_folder = output_folder / "planogram"
+    for folder in [cls_folder, det_folder, plan_folder]:
+        folder.mkdir(parents=True, exist_ok=True)
+        
+    df, timing = process_image(
+        image_path,
+        _detection_model,
+        _classification_model,
+        _ref_embeddings,
+        _ref_class_names,
+        cls_folder,
+        det_folder,
+        plan_folder
+    )
+    
+    if df.empty:
+        return {"status": "error", "message": "No products detected on reference image."}
+        
+    csv_path = Path("C:/Users/Casper/Desktop/grocery_project/datasets/migros_dataset_v6/Annotations/SDP_Product&ID_Dataset_fix.csv")
+    global_mapping = {}
+    if csv_path.exists():
+        try:
+            df_map = pd.read_csv(csv_path, header=None, names=['id', 'name'])
+            for _, row in df_map.iterrows():
+                global_mapping[str(row['id']).strip()] = str(row['name']).strip()
+        except:
+            pass
+            
+    def map_from_csv(cls_id):
+        cls_str = str(cls_id)
+        name = global_mapping.get(cls_str, "Ürün")
+        return f"{name} ({cls_str})"
+    df['predicted_class'] = df['predicted_class'].apply(map_from_csv)
+    
+    # Agnostic NMS to remove overlapping duplicate detections
+    def compute_iou(row1, row2):
+        x_left = max(row1['x1'], row2['x1'])
+        y_top = max(row1['y1'], row2['y1'])
+        x_right = min(row1['x2'], row2['x2'])
+        y_bottom = min(row1['y2'], row2['y2'])
+        if x_right < x_left or y_bottom < y_top: return 0.0
+        intersection = (x_right - x_left) * (y_bottom - y_top)
+        area1 = (row1['x2'] - row1['x1']) * (row1['y2'] - row1['y1'])
+        area2 = (row2['x2'] - row2['x1']) * (row2['y2'] - row2['y1'])
+        return intersection / float(area1 + area2 - intersection)
+        
+    if 'class_confidence' in df.columns:
+        df = df.sort_values('class_confidence', ascending=False).reset_index(drop=True)
+    keep_indices = []
+    for i in range(len(df)):
+        keep = True
+        for j in keep_indices:
+            if compute_iou(df.iloc[i], df.iloc[j]) > 0.6:
+                keep = False
+                break
+        if keep: keep_indices.append(i)
+    df = df.iloc[keep_indices].reset_index(drop=True)
+    
+    img_h = int(df['y2'].max()) + 50
+    shelf_lines = detect_shelf_lines(df, img_h)
+    df_shelved = assign_shelves(df, shelf_lines)
+    
+    schema = generate_schema_from_df(df_shelved)
+    
+    import json
+    schemas_path = Path(schemas_dir)
+    schemas_path.mkdir(parents=True, exist_ok=True)
+    out_file = schemas_path / "golden_schema.json"
+    
+    with open(out_file, "w", encoding="utf-8") as f:
+        json.dump(schema, f, ensure_ascii=False, indent=2)
+        
+    return {"status": "success", "message": "Reference saved successfully."}
+

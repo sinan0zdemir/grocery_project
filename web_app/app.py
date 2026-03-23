@@ -60,6 +60,50 @@ async def analyze_image(file: UploadFile = File(...)):
         
     return JSONResponse(content=results)
 
+@app.post("/api/set_reference")
+async def set_reference(file: UploadFile = File(...)):
+    """API endpoint to save the current shelf structure as a Golden Image reference."""
+    file_ext = Path(file.filename).suffix
+    unique_id = str(uuid.uuid4())[:8]
+    file_name = f"ref_{unique_id}{file_ext}"
+    file_path = UPLOAD_DIR / file_name
+    
+    with open(file_path, "wb") as buffer:
+        buffer.write(await file.read())
+        
+    import sys
+    if str(BASE_DIR.parent) not in sys.path:
+        sys.path.insert(0, str(BASE_DIR.parent))
+    from pipeline.inference import set_reference_image
+    
+    # Define paths
+    output_folder = BASE_DIR.parent / "demo_output"
+    schemas_dir = BASE_DIR.parent / "planogram" / "schemas"
+    
+    try:
+        results = set_reference_image(str(file_path), str(schemas_dir), output_folder)
+    except Exception as e:
+        results = {"status": "error", "message": f"Failed to set reference: {str(e)}"}
+        
+    return JSONResponse(content=results)
+
+@app.post("/api/clear_reference")
+async def clear_reference():
+    """Removes the golden schema, forcing a fallback to heuristic anomaly detection only."""
+    schemas_dir = BASE_DIR.parent / "planogram" / "schemas"
+    golden = schemas_dir / "golden_schema.json"
+    if golden.exists():
+        golden.unlink()
+        return JSONResponse(content={"status": "success", "message": "Reference cleared."})
+    return JSONResponse(content={"status": "success", "message": "No reference exists."})
+
+@app.get("/api/check_reference")
+async def check_reference():
+    """Check if a golden schema currently exists."""
+    schemas_dir = BASE_DIR.parent / "planogram" / "schemas"
+    golden = schemas_dir / "golden_schema.json"
+    return JSONResponse(content={"has_reference": golden.exists()})
+
 # Mount outputs so the frontend can display the processed images
 app.mount("/outputs", StaticFiles(directory=str(BASE_DIR.parent / "demo_output")), name="outputs")
 

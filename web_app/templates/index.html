@@ -83,7 +83,14 @@
                         </div>
                     </div>
                     
-                    <div class="action-bar">
+                    <div class="action-bar" style="display: flex; gap: 10px; justify-content: flex-end; align-items: center;">
+                        <span id="ref-status-text" style="margin-right: auto; font-size: 0.9rem; color: var(--text-secondary);">Current Reference: None</span>
+                        <button class="btn btn-outline hidden" id="clear-ref-btn" style="padding: 0.5rem;" title="Clear Golden Image"><i data-lucide="trash-2"></i></button>
+                        
+                        <button class="btn" id="set-ref-btn" style="background: var(--surface-color); border: 1px solid var(--border-color); color: var(--text-primary);" disabled>
+                            <i data-lucide="camera"></i>
+                            Save as Golden Image
+                        </button>
                         <button class="btn btn-success btn-large" id="analyze-btn" disabled>
                             <i data-lucide="zap"></i>
                             Analyze Shelf
@@ -94,30 +101,30 @@
                 <!-- Results Section (Initially hidden or skeleton) -->
                 <section class="results-section card hidden" id="results-section">
                     <div class="results-header">
-                        <h2>Analysis Results</h2>
-                        <span class="badge score-badge" id="score-badge">--% Match</span>
+                        <h2>Shelf Analysis Summary</h2>
+                        <span class="badge score-badge" id="score-badge">Detection Complete</span>
                     </div>
                     
                     <div class="metrics-grid">
-                        <div class="metric-card info" onclick="filterIssues('all')" style="cursor: pointer;" title="Tüm Ürünleri Göster">
+                        <div class="metric-card success" onclick="filterIssues('all')" style="cursor: pointer;" title="Show All Items">
                             <div class="metric-icon"><i data-lucide="package"></i></div>
                             <div class="metric-data">
                                 <span class="metric-value" id="total-items">0</span>
-                                <span class="metric-label">Total Items</span>
+                                <span class="metric-label">Total Detected Items (Green)</span>
                             </div>
                         </div>
-                        <div class="metric-card warning" onclick="filterIssues('misplaced')" style="cursor: pointer;" title="Yanlış Yerleştirilenleri Göster">
+                        <div class="metric-card danger" onclick="filterIssues('misplaced')" style="cursor: pointer;" title="Show Misplaced Items">
                             <div class="metric-icon"><i data-lucide="alert-triangle"></i></div>
                             <div class="metric-data">
                                 <span class="metric-value" id="misplaced-items">0</span>
-                                <span class="metric-label">Misplaced</span>
+                                <span class="metric-label">Misplaced Items (Red)</span>
                             </div>
                         </div>
-                        <div class="metric-card danger" onclick="filterIssues('missing')" style="cursor: pointer;" title="Eksik Ürünleri Göster">
+                        <div class="metric-card warning" onclick="filterIssues('missing')" style="cursor: pointer;" title="Show Empty/Missing Spaces">
                             <div class="metric-icon"><i data-lucide="file-minus-2"></i></div>
                             <div class="metric-data">
                                 <span class="metric-value" id="missing-items">0</span>
-                                <span class="metric-label">Missing</span>
+                                <span class="metric-label">Empty/Missing Spaces (Yellow)</span>
                             </div>
                         </div>
                     </div>

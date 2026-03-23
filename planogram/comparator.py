@@ -115,11 +115,15 @@ def compare_shelves(detected_df: pd.DataFrame, expected_schema: dict) -> dict:
         # 3) Unmatched detected items => categorize properly
         # Build set of base names expected on THIS shelf specifically
         this_shelf_bases = set(get_base_name(e) for e in expected_items)
-        # Build set of base names expected on OTHER shelves
-        other_shelf_bases = set()
+        # Build dict of base names expected on OTHER shelves mapping to shelf numbers
+        other_shelf_dict = {}
         for other_idx, other_row in enumerate(expected_rows):
             if other_idx != shelf_idx:
-                other_shelf_bases.update(get_base_name(e) for e in other_row)
+                for e in other_row:
+                    bn = get_base_name(e)
+                    if bn not in other_shelf_dict:
+                        other_shelf_dict[bn] = []
+                    other_shelf_dict[bn].append(other_idx + 1)
         
         for idx, det_item in enumerate(detected_items):
             if idx not in matched_indices:
@@ -137,12 +141,14 @@ def compare_shelves(detected_df: pd.DataFrame, expected_schema: dict) -> dict:
                         "position": idx + 1,
                         "bbox": bbox
                     })
-                elif det_base in other_shelf_bases:
+                elif det_base in other_shelf_dict:
                     # Product exists in schema but on a DIFFERENT shelf → misplaced
+                    exp_shelves = sorted(list(set(other_shelf_dict[det_base])))
+                    shelf_str = " & ".join(map(str, exp_shelves))
                     results["misplaced_items"].append({
-                        "expected_label": "(Farklı rafta olmalı)",
+                        "expected_label": f"Belongs on Shelf {shelf_str}",
                         "detected_label": det_item,
-                        "expected_shelf": None,
+                        "expected_shelf": exp_shelves[0],
                         "detected_shelf": shelf_idx + 1,
                         "position": idx + 1,
                         "bbox": bbox
@@ -206,6 +212,186 @@ def compare_shelves(detected_df: pd.DataFrame, expected_schema: dict) -> dict:
             cat_score += 1
     results["category_score"] = cat_score
         
+    return results
+
+def evaluate_shelves_heuristic(detected_df: pd.DataFrame) -> dict:
+    """
+    Evaluates shelves based on heuristic rules (no planogram schema).
+    - Missing (Yellow): Physical gaps between products.
+    - Misplaced (Red): An anomaly, a product stuck in the middle of a different product's block.
+    - Correct (Green): All other items in clusters.
+    """
+    detected_df = detected_df.copy()
+    shelf_ids = sorted(detected_df['shelf'].unique())
+    num_detected_shelves = len(shelf_ids)
+    
+    results = {
+        "compliance_score": 100.0, # Visual display only, maybe replace later
+        "total_items": len(detected_df),
+        "correct_items": [],
+        "misplaced_items": [],
+        "gap_detections": [],
+        "unexpected_items": [], # Keep empty for UI compatibility
+        "missing_items": [] # Keep empty for UI compatibility
+    }
+    
+    def get_base_name(name):
+        return name.rsplit('(', 1)[0].strip() if name else ""
+
+    # Physical Gap Detection
+    gap_items = []
+    
+    for shelf_idx in range(num_detected_shelves):
+        actual_shelf_id = shelf_ids[shelf_idx]
+        shelf_df = detected_df[detected_df['shelf'] == actual_shelf_id].sort_values('x1')
+        
+        if len(shelf_df) < 2:
+            continue
+            
+        widths = (shelf_df['x2'] - shelf_df['x1']).values
+        median_w = max(float(pd.Series(widths).median()), 20.0)
+        
+        # Check gaps between products
+        prev_x2 = None
+        for _, row in shelf_df.iterrows():
+            if prev_x2 is not None:
+                gap = row['x1'] - prev_x2
+                if gap > 0.6 * median_w:
+                    num_missing = max(1, int(round(gap / median_w)))
+                    for g in range(num_missing):
+                        gap_w = min(median_w, gap / num_missing)
+                        gap_x = int(prev_x2 + g * gap_w)
+                        gap_items.append({
+                            "label": f"Empty Space",
+                            "expected_shelf": shelf_idx + 1,
+                            "bbox": {"x1": gap_x, "y1": int(row['y1']), 
+                                    "x2": int(gap_x + gap_w), "y2": int(row['y2'])}
+                        })
+            prev_x2 = row['x2']
+            
+    results["gap_detections"] = gap_items
+    
+    # Misplaced and Correct Logic (Clustering & Anomaly)
+    for shelf_idx in range(num_detected_shelves):
+        actual_shelf_id = shelf_ids[shelf_idx]
+        shelf_df = detected_df[detected_df['shelf'] == actual_shelf_id].sort_values('x1')
+        
+        items = []
+        for idx, row in shelf_df.iterrows():
+            items.append({
+                "label": row['predicted_class'],
+                "base_name": get_base_name(row['predicted_class']),
+                "row": row,
+                "bbox": {"x1": int(row['x1']), "y1": int(row['y1']), 
+                         "x2": int(row['x2']), "y2": int(row['y2'])}
+            })
+            
+        n = len(items)
+        if n == 0:
+            continue
+            
+        for i in range(n):
+            current = items[i]
+            is_misplaced = False
+            target_brand = get_base_name(shelf_df.iloc[i]['predicted_class'])
+            left_brand = get_base_name(shelf_df.iloc[i-1]['predicted_class']) if i > 0 else None
+            right_brand = get_base_name(shelf_df.iloc[i+1]['predicted_class']) if i < n-1 else None
+            
+            # Heuristic: An item is an anomaly if NONE of its neighbors match its own brand.
+            # This captures A-B-A and A-C-B anomalies (isolated single items).
+            if left_brand and right_brand and left_brand != target_brand and right_brand != target_brand:
+                is_misplaced = True
+                if left_brand == right_brand:
+                    detail_msg = f"1 {target_brand} item found between {left_brand} blocks"
+                else:
+                    detail_msg = f"1 {target_brand} item isolated between {left_brand} and {right_brand}"
+            
+            if is_misplaced:
+                results["misplaced_items"].append({
+                    "detected_label": current['label'],
+                    "expected_label": left_brand,
+                    "expected_shelf": shelf_idx + 1,
+                    "detected_shelf": shelf_idx + 1,
+                    "bbox": current["bbox"],
+                    "detail_msg": detail_msg
+                })
+            else:
+                results["correct_items"].append({
+                    "label": current['label'],
+                    "shelf": shelf_idx + 1,
+                    "position": i + 1,
+                    "bbox": current["bbox"]
+                })
+                
+    return results
+
+def generate_schema_from_df(detected_df: pd.DataFrame) -> dict:
+    """Creates a JSON schema representation of the currently detected shelves."""
+    detected_df = detected_df.copy()
+    shelf_ids = sorted(detected_df['shelf'].unique())
+    
+    rows = []
+    for shelf_idx in range(len(shelf_ids)):
+        actual_shelf_id = shelf_ids[shelf_idx]
+        shelf_df = detected_df[detected_df['shelf'] == actual_shelf_id].sort_values('x1')
+        rows.append(shelf_df['predicted_class'].tolist())
+        
+    return {"rows": rows}
+
+def evaluate_hybrid_shelves(detected_df: pd.DataFrame, expected_schema: dict = None) -> dict:
+    """
+    Hybrid evaluation:
+    If expected_schema is None -> Use purely heuristic logic.
+    If expected_schema is provided -> Use Golden Image comparison for Missing Items, 
+                                      and Heuristic logic for Misplaced Items (anomalies).
+    """
+    heuristic_res = evaluate_shelves_heuristic(detected_df)
+    
+    if not expected_schema:
+        return heuristic_res
+        
+    schema_res = compare_shelves(detected_df, expected_schema)
+    
+    # Combine results
+    # 1. Missing Items (from Schema)
+    hybrid_missing = schema_res.get("missing_items", [])
+    
+    # 2. Unexpected Items (from Schema)
+    hybrid_unexpected = schema_res.get("unexpected_items", [])
+    
+    # 3. Gap Detections (from Heuristic)
+    hybrid_gaps = heuristic_res.get("gap_detections", [])
+    
+    # 4. Misplaced Items = Heuristic Anomalies + Schema Misplaced (avoiding overlap)
+    hybrid_misplaced = list(heuristic_res.get("misplaced_items", []))
+    heuristic_misplaced_bboxes = [str(m["bbox"]) for m in hybrid_misplaced if "bbox" in m]
+    
+    for sm in schema_res.get("misplaced_items", []):
+        if "bbox" in sm and str(sm["bbox"]) not in heuristic_misplaced_bboxes:
+            expected_info = sm.get("expected_label", "Wrong shelf")
+            sm["detail_msg"] = f"{expected_info} compared to Golden Image"
+            hybrid_misplaced.append(sm)
+            
+    # 5. Correct Items = Start with Schema Correct, remove any that are actually heuristic anomalies
+    hybrid_correct = []
+    for sc in schema_res.get("correct_items", []):
+        is_anomaly = False
+        if "bbox" in sc:
+            if str(sc["bbox"]) in heuristic_misplaced_bboxes:
+                is_anomaly = True
+        if not is_anomaly:
+            hybrid_correct.append(sc)
+            
+    results = {
+        "compliance_score": schema_res.get("compliance_score", 100.0),
+        "total_items": len(detected_df),
+        "correct_items": hybrid_correct,
+        "misplaced_items": hybrid_misplaced,
+        "gap_detections": hybrid_gaps,
+        "unexpected_items": hybrid_unexpected,
+        "missing_items": hybrid_missing,
+        "category_score": schema_res.get("category_score", 0)
+    }
     return results
 
 # Self-test block

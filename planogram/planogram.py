@@ -46,9 +46,9 @@ from scipy.stats import gaussian_kde
 from scipy.signal import find_peaks
 
 # --- CONFIGURATION ---
-SMOOTHING_FACTOR = 0.15   # KDE bandwidth (lower = tighter)
-MIN_SHELF_SPACING = 50    # Minimum pixel gap between shelf separator lines
-VALLEY_PROMINENCE = 5     # How prominent a valley must be to count as a shelf separator
+SMOOTHING_FACTOR = 0.08   # KDE bandwidth (tightened to separate close wire shelves)
+MIN_SHELF_SPACING = 30    # Minimum pixel gap between shelf separator lines
+VALLEY_PROMINENCE = 3     # How prominent a valley must be to count as a shelf separator
 
 PLANOGRAM_WIDTH_INCHES = 16   # Figure width
 ROW_HEIGHT_INCHES = 2.2       # Height per shelf row (inches)

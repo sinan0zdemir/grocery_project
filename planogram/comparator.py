@@ -147,6 +147,7 @@ def compare_shelves(detected_df: pd.DataFrame, expected_schema: dict) -> dict:
                     shelf_str = " & ".join(map(str, exp_shelves))
                     results["misplaced_items"].append({
                         "expected_label": f"Belongs on Shelf {shelf_str}",
+                        "detail_msg": f"Belongs on Shelf {shelf_str} compared to Golden Image",
                         "detected_label": det_item,
                         "expected_shelf": exp_shelves[0],
                         "detected_shelf": shelf_idx + 1,
@@ -157,6 +158,7 @@ def compare_shelves(detected_df: pd.DataFrame, expected_schema: dict) -> dict:
                     # Product not in schema at all → unexpected
                     results["unexpected_items"].append({
                         "label": det_item,
+                        "detail_msg": "Unexpected item compared to Golden Image",
                         "detected_shelf": shelf_idx + 1,
                         "detected_position": idx + 1,
                         "bbox": bbox
@@ -267,7 +269,10 @@ def evaluate_shelves_heuristic(detected_df: pd.DataFrame) -> dict:
                             "bbox": {"x1": gap_x, "y1": int(row['y1']), 
                                     "x2": int(gap_x + gap_w), "y2": int(row['y2'])}
                         })
-            prev_x2 = row['x2']
+            if prev_x2 is None:
+                prev_x2 = row['x2']
+            else:
+                prev_x2 = max(prev_x2, row['x2'])
             
     results["gap_detections"] = gap_items
     
@@ -297,19 +302,28 @@ def evaluate_shelves_heuristic(detected_df: pd.DataFrame) -> dict:
             left_brand = get_base_name(shelf_df.iloc[i-1]['predicted_class']) if i > 0 else None
             right_brand = get_base_name(shelf_df.iloc[i+1]['predicted_class']) if i < n-1 else None
             
-            # Heuristic: An item is an anomaly if NONE of its neighbors match its own brand.
-            # This captures A-B-A and A-C-B anomalies (isolated single items).
-            if left_brand and right_brand and left_brand != target_brand and right_brand != target_brand:
-                is_misplaced = True
-                if left_brand == right_brand:
-                    detail_msg = f"1 {target_brand} item found between {left_brand} blocks"
-                else:
+            has_identical_neighbor = (left_brand == target_brand) or (right_brand == target_brand)
+            
+            if not has_identical_neighbor:
+                # Isolated item. Let's see if it's flanked on both sides by foreign brands
+                if left_brand is not None and right_brand is not None:
+                    is_misplaced = True
                     detail_msg = f"1 {target_brand} item isolated between {left_brand} and {right_brand}"
+                else:
+                    # It's at the edge (or alone on the shelf). Let's check the majority brand of the shelf.
+                    majority_brand = shelf_df['predicted_class'].apply(get_base_name).mode()[0]
+                    if target_brand != majority_brand:
+                        is_misplaced = True
+                        if left_brand is None and right_brand is None:
+                            detail_msg = f"Foreign object ({target_brand}). Shelf majority is {majority_brand}"
+                        else:
+                            neighbor = left_brand if left_brand else right_brand
+                            detail_msg = f"Foreign object at edge next to {neighbor}. Shelf majority is {majority_brand}"
             
             if is_misplaced:
                 results["misplaced_items"].append({
                     "detected_label": current['label'],
-                    "expected_label": left_brand,
+                    "expected_label": majority_brand if 'majority_brand' in locals() else left_brand,
                     "expected_shelf": shelf_idx + 1,
                     "detected_shelf": shelf_idx + 1,
                     "bbox": current["bbox"],
@@ -342,8 +356,8 @@ def evaluate_hybrid_shelves(detected_df: pd.DataFrame, expected_schema: dict = N
     """
     Hybrid evaluation:
     If expected_schema is None -> Use purely heuristic logic.
-    If expected_schema is provided -> Use Golden Image comparison for Missing Items, 
-                                      and Heuristic logic for Misplaced Items (anomalies).
+    If expected_schema is provided -> Golden Image is the absolute truth for Correct/Missing/Misplaced.
+                                      Heuristic logic is strictly DISABLED, except for finding physical gaps.
     """
     heuristic_res = evaluate_shelves_heuristic(detected_df)
     
@@ -352,47 +366,10 @@ def evaluate_hybrid_shelves(detected_df: pd.DataFrame, expected_schema: dict = N
         
     schema_res = compare_shelves(detected_df, expected_schema)
     
-    # Combine results
-    # 1. Missing Items (from Schema)
-    hybrid_missing = schema_res.get("missing_items", [])
+    # 1. Provide physical empty-space gap detections from the visual heuristics
+    schema_res["gap_detections"] = heuristic_res.get("gap_detections", [])
     
-    # 2. Unexpected Items (from Schema)
-    hybrid_unexpected = schema_res.get("unexpected_items", [])
-    
-    # 3. Gap Detections (from Heuristic)
-    hybrid_gaps = heuristic_res.get("gap_detections", [])
-    
-    # 4. Misplaced Items = Heuristic Anomalies + Schema Misplaced (avoiding overlap)
-    hybrid_misplaced = list(heuristic_res.get("misplaced_items", []))
-    heuristic_misplaced_bboxes = [str(m["bbox"]) for m in hybrid_misplaced if "bbox" in m]
-    
-    for sm in schema_res.get("misplaced_items", []):
-        if "bbox" in sm and str(sm["bbox"]) not in heuristic_misplaced_bboxes:
-            expected_info = sm.get("expected_label", "Wrong shelf")
-            sm["detail_msg"] = f"{expected_info} compared to Golden Image"
-            hybrid_misplaced.append(sm)
-            
-    # 5. Correct Items = Start with Schema Correct, remove any that are actually heuristic anomalies
-    hybrid_correct = []
-    for sc in schema_res.get("correct_items", []):
-        is_anomaly = False
-        if "bbox" in sc:
-            if str(sc["bbox"]) in heuristic_misplaced_bboxes:
-                is_anomaly = True
-        if not is_anomaly:
-            hybrid_correct.append(sc)
-            
-    results = {
-        "compliance_score": schema_res.get("compliance_score", 100.0),
-        "total_items": len(detected_df),
-        "correct_items": hybrid_correct,
-        "misplaced_items": hybrid_misplaced,
-        "gap_detections": hybrid_gaps,
-        "unexpected_items": hybrid_unexpected,
-        "missing_items": hybrid_missing,
-        "category_score": schema_res.get("category_score", 0)
-    }
-    return results
+    return schema_res
 
 # Self-test block
 if __name__ == "__main__":

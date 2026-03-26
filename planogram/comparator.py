@@ -366,7 +366,10 @@ def evaluate_hybrid_shelves(detected_df: pd.DataFrame, expected_schema: dict = N
         
     schema_res = compare_shelves(detected_df, expected_schema)
     
-    # 1. Provide physical empty-space gap detections from the visual heuristics
+    # 1. Merge unexpected items into misplaced items so the UI and image drawers handle them uniformly
+    schema_res.setdefault("misplaced_items", []).extend(schema_res.get("unexpected_items", []))
+    
+    # 2. Provide physical empty-space gap detections from the visual heuristics
     schema_res["gap_detections"] = heuristic_res.get("gap_detections", [])
     
     return schema_res

@@ -81,7 +81,7 @@ def main():
         out_path = str(out_folder / f"{stem}_planogram.png")
         print(f"\nProcessing: {filename}  ({img_w}x{img_h}, {len(group)} products)")
 
-        fig = generate_planogram(
+        fig, _ = generate_planogram(
             group[['x1', 'y1', 'x2', 'y2', 'predicted_class', 'class_confidence']],
             img_h, img_w,
             image_path=img_path,

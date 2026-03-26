@@ -7,7 +7,7 @@ ROOT_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT_DIR))
 
 from demo import load_classification_model, run_detection, process_image, YOLO, CLASSIFICATION_CHECKPOINT, REFERENCE_DB_PATH, DETECTION_WEIGHTS
-from planogram import detect_shelf_lines, assign_shelves
+from planogram import detect_shelf_lines, assign_shelves, generate_planogram
 from comparator import compare_shelves, load_schema, evaluate_hybrid_shelves, generate_schema_from_df
 import pandas as pd
 
@@ -79,7 +79,7 @@ def run_analysis(image_path: str, schemas_dir: str, output_folder: Path) -> dict
     if df.empty:
         return {"status": "error", "message": "No products detected."}
         
-    csv_path = Path("C:/Users/Casper/Desktop/grocery_project/datasets/migros_dataset_v6/Annotations/SDP_Product&ID_Dataset_fix.csv")
+    csv_path = ROOT_DIR / "datasets" / "migros_dataset_v6" / "Annotations" / "SDP_Product&ID_Dataset_fix.csv"
     global_mapping = {}
     if csv_path.exists():
         try:
@@ -88,13 +88,15 @@ def run_analysis(image_path: str, schemas_dir: str, output_folder: Path) -> dict
                 global_mapping[str(row['id']).strip()] = str(row['name']).strip()
         except:
             pass
-            
+
     def map_from_csv(cls_id):
         cls_str = str(cls_id)
-        name = global_mapping.get(cls_str, "Ürün")
-        return f"{name} ({cls_str})"
+        name = global_mapping.get(cls_str)
+        if name:
+            return f"{name} ({cls_str})"
+        return cls_str
     df['predicted_class'] = df['predicted_class'].apply(map_from_csv)
-    
+
     # Agnostic NMS to remove overlapping duplicate detections
     def compute_iou(row1, row2):
         x_left = max(row1['x1'], row2['x1'])
@@ -106,10 +108,10 @@ def run_analysis(image_path: str, schemas_dir: str, output_folder: Path) -> dict
         area1 = (row1['x2'] - row1['x1']) * (row1['y2'] - row1['y1'])
         area2 = (row2['x2'] - row2['x1']) * (row2['y2'] - row2['y1'])
         return intersection / float(area1 + area2 - intersection)
-        
+
     if 'class_confidence' in df.columns:
         df = df.sort_values('class_confidence', ascending=False).reset_index(drop=True)
-        
+
     keep_indices = []
     for i in range(len(df)):
         keep = True
@@ -119,7 +121,22 @@ def run_analysis(image_path: str, schemas_dir: str, output_folder: Path) -> dict
                 break
         if keep: keep_indices.append(i)
     df = df.iloc[keep_indices].reset_index(drop=True)
-        
+
+    # Filter out low-confidence classifications (signs, posters, partial items)
+    CONF_THRESHOLD = 0.45
+    if 'class_confidence' in df.columns:
+        df = df[df['class_confidence'] >= CONF_THRESHOLD].reset_index(drop=True)
+
+    # Filter out bottom-edge cut-off items (half-visible bottom shelf)
+    import cv2 as _cv2
+    _img = _cv2.imread(image_path)
+    if _img is not None and not df.empty:
+        _img_h = _img.shape[0]
+        _heights = (df['y2'] - df['y1'])
+        _median_h = _heights.median()
+        _bottom_cutoff = (df['y2'] >= _img_h - 10) & (_heights < _median_h * 0.5)
+        df = df[~_bottom_cutoff].reset_index(drop=True)
+
     # 3. Planogram grouping
     img_h = int(df['y2'].max()) + 50
     shelf_lines = detect_shelf_lines(df, img_h)
@@ -136,38 +153,52 @@ def run_analysis(image_path: str, schemas_dir: str, output_folder: Path) -> dict
             
     results = evaluate_hybrid_shelves(df_shelved, expected_schema)
     
-    # 5. Visual Compliance Overlay
+    # 5. Generate planogram image with cell position tracking
     import cv2
-    img = cv2.imread(image_path)
-    if img is not None:
-        for item in results.get("correct_items", []):
-            b = item.get("bbox")
-            if b: cv2.rectangle(img, (b["x1"], b["y1"]), (b["x2"], b["y2"]), (0, 255, 0), 4)
+    import matplotlib
+    matplotlib.use('Agg')
+    import matplotlib.pyplot as plt
 
-        for item in results.get("misplaced_items", []):
-            b = item.get("bbox")
-            if b: cv2.rectangle(img, (b["x1"], b["y1"]), (b["x2"], b["y2"]), (0, 0, 255), 4)
+    _img = cv2.imread(image_path)
+    _img_h, _img_w = (_img.shape[:2]) if _img is not None else (img_h, int(df['x2'].max()) + 50)
+    base_name = Path(image_path).stem
+    plan_path = str(plan_folder / f"{base_name}_planogram.png")
 
-        for item in results.get("unexpected_items", []):
-            pass
+    fig, planogram_cells = generate_planogram(
+        df_shelved, _img_h, _img_w,
+        image_path=image_path,
+        output_path=plan_path,
+        show_images=True,
+        title="Planogram Analysis",
+    )
+    plt.close(fig)
 
-        # Draw yellow rectangles for physical gaps (empty spaces)
-        for item in results.get("gap_detections", []):
-            b = item.get("bbox")
+    # Build lookup: original bbox → planogram pixel bbox
+    bbox_map = {}
+    for cell in planogram_cells:
+        ob = cell.get('orig_bbox', {})
+        pb = cell.get('planogram_bbox')
+        if pb:
+            bbox_map[(ob['x1'], ob['y1'], ob['x2'], ob['y2'])] = pb
+
+    # Replace bboxes in comparator results with planogram pixel positions
+    for category in ('correct_items', 'misplaced_items', 'unexpected_items'):
+        for item in results.get(category, []):
+            b = item.get('bbox')
             if b:
-                cv2.rectangle(img, (b["x1"], b["y1"]), (b["x2"], b["y2"]), (0, 255, 255), 4)
-                cv2.putText(img, "BOS", (b["x1"]+5, b["y1"]+25), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
-            
-        base_name = Path(image_path).stem
-        out_path = plan_folder / f"{base_name}_compliance.jpg"
-        cv2.imwrite(str(out_path), img)
-        results['image_url'] = f"/outputs/planogram/{base_name}_compliance.jpg"
-    else:
-        results['image_url'] = f"/outputs/planogram/{Path(image_path).stem}_planogram.png"
-    
+                key = (b['x1'], b['y1'], b['x2'], b['y2'])
+                if key in bbox_map:
+                    item['bbox'] = bbox_map[key]
+
+    # Gap bboxes are synthetic (not real detections) and have no planogram cells,
+    # so remove them to prevent false click matches on the planogram image.
+    for item in results.get('gap_detections', []):
+        item.pop('bbox', None)
+
+    results['image_url'] = f"/outputs/planogram/{base_name}_planogram.png"
     results['status'] = 'success'
     results['message'] = "Analysis completed successfully."
-    
+
     return results
 
 def set_reference_image(image_path: str, schemas_dir: str, output_folder: Path) -> dict:
@@ -194,7 +225,7 @@ def set_reference_image(image_path: str, schemas_dir: str, output_folder: Path) 
     if df.empty:
         return {"status": "error", "message": "No products detected on reference image."}
         
-    csv_path = Path("C:/Users/Casper/Desktop/grocery_project/datasets/migros_dataset_v6/Annotations/SDP_Product&ID_Dataset_fix.csv")
+    csv_path = ROOT_DIR / "datasets" / "migros_dataset_v6" / "Annotations" / "SDP_Product&ID_Dataset_fix.csv"
     global_mapping = {}
     if csv_path.exists():
         try:
@@ -203,13 +234,15 @@ def set_reference_image(image_path: str, schemas_dir: str, output_folder: Path) 
                 global_mapping[str(row['id']).strip()] = str(row['name']).strip()
         except:
             pass
-            
+
     def map_from_csv(cls_id):
         cls_str = str(cls_id)
-        name = global_mapping.get(cls_str, "Ürün")
-        return f"{name} ({cls_str})"
+        name = global_mapping.get(cls_str)
+        if name:
+            return f"{name} ({cls_str})"
+        return cls_str
     df['predicted_class'] = df['predicted_class'].apply(map_from_csv)
-    
+
     # Agnostic NMS to remove overlapping duplicate detections
     def compute_iou(row1, row2):
         x_left = max(row1['x1'], row2['x1'])
@@ -221,7 +254,7 @@ def set_reference_image(image_path: str, schemas_dir: str, output_folder: Path) 
         area1 = (row1['x2'] - row1['x1']) * (row1['y2'] - row1['y1'])
         area2 = (row2['x2'] - row2['x1']) * (row2['y2'] - row2['y1'])
         return intersection / float(area1 + area2 - intersection)
-        
+
     if 'class_confidence' in df.columns:
         df = df.sort_values('class_confidence', ascending=False).reset_index(drop=True)
     keep_indices = []
@@ -233,7 +266,12 @@ def set_reference_image(image_path: str, schemas_dir: str, output_folder: Path) 
                 break
         if keep: keep_indices.append(i)
     df = df.iloc[keep_indices].reset_index(drop=True)
-    
+
+    # Filter out low-confidence classifications
+    CONF_THRESHOLD = 0.45
+    if 'class_confidence' in df.columns:
+        df = df[df['class_confidence'] >= CONF_THRESHOLD].reset_index(drop=True)
+
     img_h = int(df['y2'].max()) + 50
     shelf_lines = detect_shelf_lines(df, img_h)
     df_shelved = assign_shelves(df, shelf_lines)

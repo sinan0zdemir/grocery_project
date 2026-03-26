@@ -17,9 +17,11 @@ app = FastAPI(title="Grocery Planogram Analyzer")
 app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="static")
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 
-# Define upload folder
-UPLOAD_DIR = BASE_DIR.parent / "demo_output" / "uploads"
-UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+# Create all output directories at startup
+OUTPUT_DIR = BASE_DIR.parent / "demo_output"
+UPLOAD_DIR = OUTPUT_DIR / "uploads"
+for _d in [UPLOAD_DIR, OUTPUT_DIR / "classification", OUTPUT_DIR / "detection", OUTPUT_DIR / "planogram"]:
+    _d.mkdir(parents=True, exist_ok=True)
 
 @app.get("/", response_class=HTMLResponse)
 async def read_root(request: Request):
@@ -49,12 +51,8 @@ async def analyze_image(file: UploadFile = File(...)):
     # Run the ML pipeline
     try:
         results = run_analysis(str(file_path), str(schemas_dir), output_folder)
-        # Update image URL to point to a mounted static folder or endpoint
-        # The frontend expects 'image_url' to be the visual planogram
-        base_name = file_path.stem
-        # Ensure we have a route to serve these files or copy them to static
-        # Assuming we serve output via a new mount
-        results['image_url'] = f"/outputs/planogram/{base_name}_planogram.png"
+        # image_url is set by run_analysis to the planogram image,
+        # with bbox coordinates mapped to planogram pixel positions.
     except Exception as e:
         results = {"status": "error", "message": f"Pipeline failed: {str(e)}"}
         

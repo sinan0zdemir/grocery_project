@@ -46,7 +46,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const res = await fetch('/api/check_reference');
             const data = await res.json();
             if (data.has_reference) {
-                refStatusText.textContent = 'Current Reference: Active (Golden Image)';
+                refStatusText.textContent = 'Current Reference: Active (Reference Photo)';
                 refStatusText.style.color = 'var(--success)';
                 clearRefBtn.classList.remove('hidden');
             } else {
@@ -61,10 +61,10 @@ document.addEventListener('DOMContentLoaded', () => {
     checkReferenceStatus();
 
     clearRefBtn.addEventListener('click', async () => {
-        if (confirm("Are you sure you want to clear the Golden Image reference?")) {
+        if (confirm("Are you sure you want to clear the Reference Photo?")) {
             await fetch('/api/clear_reference', { method: 'POST' });
             checkReferenceStatus();
-            alert("Reference cleared.");
+            alert("Reference Photo cleared.");
         }
     });
 
@@ -141,6 +141,8 @@ document.addEventListener('DOMContentLoaded', () => {
             loadingOverlay.classList.add('hidden');
             resultsSection.classList.remove('hidden');
             resultsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            // If image already loaded before section became visible, re-setup click
+            requestAnimationFrame(() => setupImageClick());
         }
     });
 
@@ -157,7 +159,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const data = await response.json();
 
             if (data.status === 'success') {
-                alert('Successfully generated and saved Golden Image Reference!');
+                alert('Reference Photo saved successfully!');
                 checkReferenceStatus();
             } else {
                 alert('Setting reference failed: ' + data.message);
@@ -169,6 +171,127 @@ document.addEventListener('DOMContentLoaded', () => {
             loadingOverlay.classList.add('hidden');
         }
     });
+
+    // Close popup when clicking outside
+    document.addEventListener('click', () => {
+        document.getElementById('annotation-popup').style.display = 'none';
+    });
+
+    // Stores annotations to be drawn after section becomes visible
+    let _complianceAnnotations = [];
+
+    function displayComplianceImage(data) {
+        if (!data.image_url) return;
+
+        const section = document.getElementById('compliance-section');
+        const container = document.getElementById('compliance-container');
+        const img = document.getElementById('compliance-image');
+
+        _complianceAnnotations = [];
+        (data.gap_detections || []).forEach(item => {
+            if (item.bbox) _complianceAnnotations.push({ item, type: 'gap' });
+        });
+        (data.correct_items || []).forEach(item => {
+            if (item.bbox) _complianceAnnotations.push({ item, type: 'correct' });
+        });
+        (data.misplaced_items || []).forEach(item => {
+            if (item.bbox) _complianceAnnotations.push({ item, type: 'misplaced' });
+        });
+
+        section.style.display = 'block';
+
+        img.onload = () => {
+            // Remove old canvas if any
+            container.querySelectorAll('canvas').forEach(c => c.remove());
+
+            // Create canvas matching image's natural pixel dimensions
+            const canvas = document.createElement('canvas');
+            canvas.width = img.naturalWidth;
+            canvas.height = img.naturalHeight;
+            // Overlay canvas exactly on top of image using CSS
+            canvas.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;cursor:crosshair;border-radius:8px;';
+
+            canvas.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const rect = canvas.getBoundingClientRect();
+                // Convert display coords → canvas/image pixel coords
+                const x = (e.clientX - rect.left) * (canvas.width / rect.width);
+                const y = (e.clientY - rect.top) * (canvas.height / rect.height);
+
+                const ordered = [
+                    ..._complianceAnnotations.filter(a => a.type === 'misplaced'),
+                    ..._complianceAnnotations.filter(a => a.type === 'correct'),
+                    ..._complianceAnnotations.filter(a => a.type === 'gap'),
+                ];
+                for (const ann of ordered) {
+                    const b = ann.item.bbox;
+                    if (b && x >= b.x1 && x <= b.x2 && y >= b.y1 && y <= b.y2) {
+                        showAnnotationPopup(ann.item, ann.type, e.clientX, e.clientY);
+                        return;
+                    }
+                }
+                // Clicked on empty area — close any open popup
+                document.getElementById('annotation-popup').style.display = 'none';
+            });
+
+            container.appendChild(canvas);
+        };
+
+        img.src = data.image_url + '?t=' + Date.now();
+    }
+
+    function setupImageClick() { /* no-op */ }
+
+    function showAnnotationPopup(item, type, x, y) {
+        const popup = document.getElementById('annotation-popup');
+        const content = document.getElementById('popup-content');
+
+        let html = '';
+        if (type === 'correct') {
+            html = `
+                <div style="color:var(--success);font-weight:600;margin-bottom:6px;">✓ Correct Item</div>
+                <div style="font-size:0.85rem;color:var(--text-secondary);">${item.label || item.detected_label || 'Product'}</div>
+                <div style="font-size:0.8rem;color:#888;margin-top:4px;">Shelf ${item.shelf ?? item.detected_shelf ?? '-'}</div>
+            `;
+        } else if (type === 'misplaced') {
+            const found = item.detected_label || item.label || 'Unknown Item';
+            const hasExpected = item.expected_label && item.expected_label !== 'Unknown';
+            if (hasExpected) {
+                html = `
+                    <div style="color:var(--danger);font-weight:600;margin-bottom:8px;">⚠ Misplaced Product</div>
+                    <div style="font-size:0.85rem;margin-bottom:4px;"><span style="color:var(--success);font-weight:500;">Expected:</span> <span style="color:var(--text-secondary);">${item.expected_label}</span></div>
+                    <div style="font-size:0.85rem;margin-bottom:4px;"><span style="color:var(--danger);font-weight:500;">Found:</span> <span style="color:var(--text-primary);">${found}</span></div>
+                    ${item.detail_msg ? `<div style="font-size:0.75rem;color:#888;font-style:italic;margin-top:4px;">${item.detail_msg}</div>` : ''}
+                `;
+            } else {
+                html = `
+                    <div style="color:var(--danger);font-weight:600;margin-bottom:8px;">⚠ Unexpected Product</div>
+                    <div style="font-size:0.85rem;margin-bottom:4px;"><span style="color:var(--danger);font-weight:500;">Found:</span> <span style="color:var(--text-primary);">${found}</span></div>
+                    <div style="font-size:0.75rem;color:#888;font-style:italic;margin-top:4px;">${item.detail_msg || 'This product is not in the reference image'}</div>
+                    <div style="font-size:0.8rem;color:#888;margin-top:4px;">Shelf ${item.detected_shelf ?? '-'}</div>
+                `;
+            }
+        } else if (type === 'gap') {
+            html = `
+                <div style="color:var(--warning);font-weight:600;margin-bottom:8px;">◻ Physical Gap Detected</div>
+                <div style="font-size:0.85rem;color:var(--text-secondary);">Empty space on shelf</div>
+                <div style="font-size:0.8rem;color:#888;margin-top:4px;">Shelf ${item.expected_shelf ?? '-'}</div>
+                ${item.label && item.label !== 'Empty Space' ? `<div style="font-size:0.8rem;margin-top:4px;"><span style="color:var(--warning);">Space for:</span> ${item.label}</div>` : ''}
+            `;
+        }
+
+        content.innerHTML = html;
+
+        const popupW = 300, popupH = 130;
+        let left = x + 14;
+        let top = y - 20;
+        if (left + popupW > window.innerWidth) left = x - popupW - 14;
+        if (top + popupH > window.innerHeight) top = window.innerHeight - popupH - 12;
+
+        popup.style.left = left + 'px';
+        popup.style.top = top + 'px';
+        popup.style.display = 'block';
+    }
 
     function displayResults(data) {
         scoreBadge.textContent = `Analysis Complete`;
@@ -264,5 +387,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         lucide.createIcons();
+        displayComplianceImage(data); // sets img.src and stores annotations; overlays built after section visible
     }
 });

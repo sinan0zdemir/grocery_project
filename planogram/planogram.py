@@ -160,7 +160,7 @@ def generate_planogram(
     output_path: Optional[str] = None,
     show_images: bool = False,
     title: str = "Planogram",
-) -> plt.Figure:
+):
     """
     Generate a planogram figure from classified detection results.
 
@@ -176,14 +176,16 @@ def generate_planogram(
         title:        Figure title.
 
     Returns:
-        matplotlib Figure object.
+        Tuple of (matplotlib Figure, list of cell position dicts).
+        Each cell dict has 'orig_bbox' (original image coords) and
+        'planogram_bbox' (pixel coords in saved planogram image).
     """
     if df.empty:
         fig, ax = plt.subplots(figsize=(10, 3))
         ax.text(0.5, 0.5, "No products detected", ha='center', va='center',
                 fontsize=14, color='gray')
         ax.axis('off')
-        return fig
+        return fig, []
 
     # --- 1. Shelf detection & assignment ---
     shelf_lines = detect_shelf_lines(df, img_h)
@@ -225,6 +227,8 @@ def generate_planogram(
     ax.set_aspect('auto')
 
     # --- 5. Draw each shelf row ---
+    cell_records = []  # Track cell positions for click interaction
+
     for row_idx, shelf_id in enumerate(shelf_ids):
         shelf_df = df_shelved[df_shelved['shelf'] == shelf_id].sort_values('x1')
 
@@ -258,6 +262,15 @@ def generate_planogram(
             cell_w = bbox_w
             cell_y = row_idx + 0.04       # small top padding
             cell_h = 0.92                 # full row height minus padding
+
+            # Track this cell for interactive mapping
+            cell_records.append({
+                'orig_bbox': {'x1': x1, 'y1': y1, 'x2': x2, 'y2': y2},
+                'data_x': cell_x, 'data_y': cell_y,
+                'data_w': cell_w, 'data_h': cell_h,
+                'shelf': row_idx,
+                'label': cls,
+            })
 
             # Render crop image inside cell (optional) — orantılı boyutlandırma
             if show_images and orig_img is not None:
@@ -338,12 +351,41 @@ def generate_planogram(
 
     plt.tight_layout()
 
-    # --- 9. Save ---
+    # --- 9. Save & compute planogram pixel bboxes ---
+    _SAVE_DPI = 150
     if output_path:
-        plt.savefig(output_path, dpi=150, bbox_inches='tight')
+        plt.savefig(output_path, dpi=_SAVE_DPI, bbox_inches='tight', pad_inches=0)
         print(f"  Planogram saved: {output_path}")
 
-    return fig
+        # Compute pixel positions of each cell in the saved image
+        fig.canvas.draw()
+        renderer = fig.canvas.get_renderer()
+        tight_bbox = fig.get_tightbbox(renderer)
+        # tight_bbox is in inches, origin at figure bottom-left
+        tb_x0_px = tight_bbox.x0 * _SAVE_DPI
+        tb_y0_px = tight_bbox.y0 * _SAVE_DPI
+        tb_h_px = tight_bbox.height * _SAVE_DPI
+
+        for cell in cell_records:
+            corners = ax.transData.transform([
+                (cell['data_x'], cell['data_y']),
+                (cell['data_x'] + cell['data_w'], cell['data_y'] + cell['data_h'])
+            ])
+            # Convert matplotlib display coords (origin bottom-left) to
+            # saved image pixel coords (origin top-left, clipped to tight bbox)
+            px_x1 = corners[0][0] - tb_x0_px
+            px_y1 = (tb_y0_px + tb_h_px) - corners[0][1]
+            px_x2 = corners[1][0] - tb_x0_px
+            px_y2 = (tb_y0_px + tb_h_px) - corners[1][1]
+
+            cell['planogram_bbox'] = {
+                'x1': int(min(px_x1, px_x2)),
+                'y1': int(min(px_y1, px_y2)),
+                'x2': int(max(px_x1, px_x2)),
+                'y2': int(max(px_y1, px_y2)),
+            }
+
+    return fig, cell_records
 
 
 # =============================================================================
@@ -459,7 +501,7 @@ def main():
                 img_w = int(df['x2'].max()) + 50
 
             out_path = str(out_folder / f"{stem}_planogram.png")
-            fig = generate_planogram(
+            fig, _ = generate_planogram(
                 df, img_h, img_w,
                 image_path=img_path,
                 output_path=out_path,
@@ -505,7 +547,7 @@ def main():
     print(f"  Image size: {img_w}x{img_h} pixels")
     print(f"  Products:   {len(df)}")
 
-    fig = generate_planogram(
+    fig, _ = generate_planogram(
         df, img_h, img_w,
         image_path=img_path,
         output_path=out_path,

@@ -89,7 +89,7 @@
                         
                         <button class="btn" id="set-ref-btn" style="background: var(--surface-color); border: 1px solid var(--border-color); color: var(--text-primary);" disabled>
                             <i data-lucide="camera"></i>
-                            Save as Golden Image
+                            Save as Reference Photo
                         </button>
                         <button class="btn btn-success btn-large" id="analyze-btn" disabled>
                             <i data-lucide="zap"></i>
@@ -104,7 +104,15 @@
                         <h2>Shelf Analysis Summary</h2>
                         <span class="badge score-badge" id="score-badge">Detection Complete</span>
                     </div>
-                    
+
+                    <!-- Compliance Image -->
+                    <div id="compliance-section" style="display:none; margin-bottom: 1.5rem;">
+                        <h3 style="margin-bottom: 0.75rem; font-size: 1rem; color: var(--text-secondary);">Compliance Overlay <span style="font-size:0.8rem; font-weight:400;">(click on a product to see details)</span></h3>
+                        <div id="compliance-container" style="position: relative; display: inline-block; max-width: 100%;">
+                            <img id="compliance-image" src="" alt="Compliance Overlay" style="display: block; max-height: 65vh; max-width: 100%; width: auto; border-radius: 8px;">
+                        </div>
+                    </div>
+
                     <div class="metrics-grid">
                         <div class="metric-card success" onclick="filterIssues('all')" style="cursor: pointer;" title="Show All Items">
                             <div class="metric-icon"><i data-lucide="package"></i></div>
@@ -148,6 +156,12 @@
                 </div>
             </div>
         </main>
+    </div>
+
+    <!-- Annotation Popup -->
+    <div id="annotation-popup" style="display:none; position:fixed; z-index:1000; background:var(--card-bg, #1e1e2e); border:1px solid var(--border-color); border-radius:10px; padding:14px 16px 12px; max-width:300px; box-shadow:0 8px 32px rgba(0,0,0,0.35);">
+        <button onclick="document.getElementById('annotation-popup').style.display='none'" style="position:absolute;top:8px;right:10px;background:none;border:none;cursor:pointer;font-size:1.1rem;color:var(--text-secondary);line-height:1;">×</button>
+        <div id="popup-content"></div>
     </div>
 
     <script src="/static/js/main.js"></script>

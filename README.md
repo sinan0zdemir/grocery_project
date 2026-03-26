@@ -177,9 +177,27 @@ No arguments required - uses default paths.
 
 ## Dependencies
 
-Key dependencies (see `pyproject.toml` for full list):
-- PyTorch
-- torchvision
-- ultralytics (YOLO)
-- cvpce (DIHE library, in `../cvpce/`)
-- umap-learn (for embedding visualization)
+Tüm bağımlılıkları kurmak için:
+
+```bash
+pip3 install -r requirements.txt
+```
+
+| Paket | Açıklama |
+|-------|----------|
+| `torch` | Derin öğrenme framework'ü |
+| `torchvision` | PyTorch görüntü modelleri ve dönüşümleri |
+| `ultralytics` | YOLOv11 nesne tespiti |
+| `opencv-python` | Görüntü işleme (cv2) |
+| `Pillow` | Görüntü okuma/yazma (PIL) |
+| `numpy` | Sayısal hesaplama |
+| `pandas` | Veri işleme |
+| `matplotlib` | Görselleştirme |
+| `scipy` | Bilimsel hesaplama (sinyal işleme, istatistik) |
+| `tqdm` | İlerleme çubuğu |
+| `fastapi` | Web API framework'ü |
+| `uvicorn[standard]` | ASGI sunucusu |
+| `python-multipart` | Dosya yükleme desteği |
+| `jinja2` | HTML şablon motoru |
+| `cvpce` | DIHE kütüphanesi (`../cvpce/` dizininden) |
+| `umap-learn` | Embedding görselleştirme (UMAP projeksiyonu) |

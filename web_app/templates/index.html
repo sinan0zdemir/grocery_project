@@ -55,11 +55,6 @@
                     <h1>Shelf Analysis</h1>
                     <p>Upload a store shelf photo to verify planogram compliance.</p>
                 </div>
-                <div class="user-profile">
-                    <div class="avatar">
-                        <i data-lucide="user"></i>
-                    </div>
-                </div>
             </header>
 
             <div class="content-grid">
@@ -78,14 +73,16 @@
                         <div class="preview-container hidden" id="preview-container">
                             <img id="image-preview" src="" alt="Shelf Preview">
                             <div class="preview-overlay">
-                                <button class="btn btn-icon" id="remove-img-btn" title="Remove"><i data-lucide="x"></i></button>
+                                <button class="btn" id="remove-img-btn" style="background:rgba(0,0,0,0.6); border:1px solid rgba(255,255,255,0.2); color:white; font-size:0.8rem; padding:0.4rem 0.85rem; border-radius:8px;">
+                                    <i data-lucide="image-plus"></i> Change Photo
+                                </button>
                             </div>
                         </div>
                     </div>
                     
                     <div class="action-bar" style="display: flex; gap: 10px; justify-content: flex-end; align-items: center;">
                         <span id="ref-status-text" style="margin-right: auto; font-size: 0.9rem; color: var(--text-secondary);">Current Reference: None</span>
-                        <button class="btn btn-outline hidden" id="clear-ref-btn" style="padding: 0.5rem;" title="Clear Golden Image"><i data-lucide="trash-2"></i></button>
+                        <button class="btn btn-outline hidden" id="clear-ref-btn" style="padding: 0.5rem 0.85rem; font-size: 0.85rem; color: var(--danger, #e05); border-color: var(--danger, #e05);">Delete Reference Photo</button>
                         
                         <button class="btn" id="set-ref-btn" style="background: var(--surface-color); border: 1px solid var(--border-color); color: var(--text-primary);" disabled>
                             <i data-lucide="camera"></i>
@@ -97,6 +94,16 @@
                         </button>
                     </div>
                 </section>
+
+                <!-- Reference Photo Preview -->
+                <div id="ref-photo-preview" class="card glassmorphism hidden" style="padding: 18px 24px;">
+                    <div style="display:flex; align-items:center; gap:8px; margin-bottom:12px; color:var(--success);">
+                        <i data-lucide="image" style="width:16px;height:16px;"></i>
+                        <span style="font-size:0.9rem; font-weight:600;">Reference Photo</span>
+                    </div>
+                    <img id="ref-photo-img" src="" alt="Reference Photo"
+                         style="max-width:100%; max-height:280px; object-fit:contain; border-radius:8px; display:block; margin:0 auto;">
+                </div>
 
                 <!-- Results Section (Initially hidden or skeleton) -->
                 <section class="results-section card hidden" id="results-section">
@@ -118,21 +125,21 @@
                             <div class="metric-icon"><i data-lucide="package"></i></div>
                             <div class="metric-data">
                                 <span class="metric-value" id="total-items">0</span>
-                                <span class="metric-label">Total Detected Items (Green)</span>
+                                <span class="metric-label">Products on Shelf</span>
                             </div>
                         </div>
                         <div class="metric-card danger" onclick="filterIssues('misplaced')" style="cursor: pointer;" title="Show Misplaced Items">
                             <div class="metric-icon"><i data-lucide="alert-triangle"></i></div>
                             <div class="metric-data">
                                 <span class="metric-value" id="misplaced-items">0</span>
-                                <span class="metric-label">Misplaced Items (Red)</span>
+                                <span class="metric-label">Misplaced Products</span>
                             </div>
                         </div>
                         <div class="metric-card warning" onclick="filterIssues('missing')" style="cursor: pointer;" title="Show Empty/Missing Spaces">
                             <div class="metric-icon"><i data-lucide="file-minus-2"></i></div>
                             <div class="metric-data">
                                 <span class="metric-value" id="missing-items">0</span>
-                                <span class="metric-label">Empty/Missing Spaces (Yellow)</span>
+                                <span class="metric-label">Empty Spaces on Shelf</span>
                             </div>
                         </div>
                     </div>
@@ -151,10 +158,13 @@
             <div class="loading-overlay hidden" id="loading-overlay">
                 <div class="loader-card glassmorphism">
                     <div class="spinner"></div>
-                    <h3>AI is analyzing...</h3>
-                    <p>Running YOLO Detection & ArcFace Classification</p>
+                    <h3 id="loading-title">Analyzing shelf...</h3>
+                    <p id="loading-subtitle">Detecting products and checking shelf layout</p>
                 </div>
             </div>
+
+            <!-- Toast Notification -->
+            <div id="toast-container" style="position:fixed; top:1.2rem; right:1.5rem; z-index:9999; display:flex; flex-direction:column; gap:0.5rem; pointer-events:none;"></div>
         </main>
     </div>
 

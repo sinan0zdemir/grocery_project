@@ -174,19 +174,71 @@ def run_analysis(image_path: str, schemas_dir: str, output_folder: Path) -> dict
     plt.close(fig)
 
     # Build lookup: original bbox → planogram pixel bbox
+    # Use int() on both sides to avoid float64 vs int mismatch in dict key lookup
     bbox_map = {}
     for cell in planogram_cells:
         ob = cell.get('orig_bbox', {})
         pb = cell.get('planogram_bbox')
-        if pb:
-            bbox_map[(ob['x1'], ob['y1'], ob['x2'], ob['y2'])] = pb
+        if pb and ob:
+            key = (int(ob['x1']), int(ob['y1']), int(ob['x2']), int(ob['y2']))
+            bbox_map[key] = pb
+
+    # Save original-image bbox annotations for compliance image click interaction (must be BEFORE bbox remapping)
+    compliance_annotations = []
+    for item in results.get('correct_items', []):
+        if item.get('bbox'):
+            compliance_annotations.append({'item': {k: v for k, v in item.items()}, 'type': 'correct'})
+    for item in results.get('misplaced_items', []):
+        if item.get('bbox'):
+            compliance_annotations.append({'item': {k: v for k, v in item.items()}, 'type': 'misplaced'})
+    for item in results.get('gap_detections', []):
+        if item.get('bbox'):
+            compliance_annotations.append({'item': {k: v for k, v in item.items()}, 'type': 'gap'})
+
+    # Generate compliance image: draw colored boxes on original photo (must be BEFORE bbox remapping)
+    comp_img = _img.copy() if _img is not None else None
+    if comp_img is not None:
+        font = cv2.FONT_HERSHEY_SIMPLEX
+        font_scale = 0.55
+        thickness = 4
+        text_thickness = 2
+
+        # Draw correct items - green
+        for item in results.get('correct_items', []):
+            b = item.get('bbox')
+            if b:
+                cv2.rectangle(comp_img, (b['x1'], b['y1']), (b['x2'], b['y2']), (0, 220, 0), thickness)
+
+        # Draw misplaced items - red
+        for item in results.get('misplaced_items', []):
+            b = item.get('bbox')
+            if b:
+                cv2.rectangle(comp_img, (b['x1'], b['y1']), (b['x2'], b['y2']), (0, 0, 220), thickness)
+
+        # Draw gap detections - yellow with "BOS" label
+        for item in results.get('gap_detections', []):
+            b = item.get('bbox')
+            if b:
+                cv2.rectangle(comp_img, (b['x1'], b['y1']), (b['x2'], b['y2']), (0, 220, 220), thickness)
+                label = "BOS"
+                text_x = b['x1'] + 4
+                text_y = b['y1'] + 14
+                cv2.putText(comp_img, label, (text_x, text_y), font, font_scale, (0, 0, 0), text_thickness + 1, cv2.LINE_AA)
+                cv2.putText(comp_img, label, (text_x, text_y), font, font_scale, (0, 220, 220), text_thickness, cv2.LINE_AA)
+
+        comp_folder = output_folder / "compliance"
+        comp_folder.mkdir(parents=True, exist_ok=True)
+        comp_path = str(comp_folder / f"{base_name}_compliance.jpg")
+        cv2.imwrite(comp_path, comp_img)
+        results['compliance_image_url'] = f"/outputs/compliance/{base_name}_compliance.jpg"
+        results['compliance_annotations'] = compliance_annotations
 
     # Replace bboxes in comparator results with planogram pixel positions
     for category in ('correct_items', 'misplaced_items', 'unexpected_items'):
         for item in results.get(category, []):
             b = item.get('bbox')
             if b:
-                key = (b['x1'], b['y1'], b['x2'], b['y2'])
+                key = (int(b['x1']), int(b['y1']), int(b['x2']), int(b['y2']))
                 if key in bbox_map:
                     item['bbox'] = bbox_map[key]
 
@@ -285,6 +337,14 @@ def set_reference_image(image_path: str, schemas_dir: str, output_folder: Path) 
     
     with open(out_file, "w", encoding="utf-8") as f:
         json.dump(schema, f, ensure_ascii=False, indent=2)
-        
+
+    # Save a copy of the reference image for UI display
+    import cv2 as _cv2_ref
+    _ref_dir = Path(output_folder) / "reference"
+    _ref_dir.mkdir(parents=True, exist_ok=True)
+    _ref_img_data = _cv2_ref.imread(image_path)
+    if _ref_img_data is not None:
+        _cv2_ref.imwrite(str(_ref_dir / "reference_image.jpg"), _ref_img_data)
+
     return {"status": "success", "message": "Reference saved successfully."}
 

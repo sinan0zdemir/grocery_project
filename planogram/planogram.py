@@ -37,7 +37,6 @@ import pandas as pd
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
-import matplotlib.patches as mpatches
 from matplotlib.patches import FancyBboxPatch
 from pathlib import Path
 from typing import List, Tuple, Optional, Dict
@@ -331,24 +330,6 @@ def generate_planogram(
     # Left margin for shelf labels
     ax.set_xlim(-img_w * 0.06, img_w * 1.01)
 
-    # --- 8. Legend ---
-    legend_patches = [
-        mpatches.Patch(facecolor=color, edgecolor='gray', label=cls)
-        for cls, color in sorted(class_colors.items())
-    ]
-    if legend_patches:
-        num_cols = max(1, min(len(legend_patches), 4))
-        ax.legend(
-            handles=legend_patches,
-            loc='upper right',
-            bbox_to_anchor=(1.0, 1.0),
-            fontsize=7,
-            ncol=num_cols,
-            title="Products",
-            title_fontsize=8,
-            framealpha=0.9,
-        )
-
     plt.tight_layout()
 
     # --- 9. Save & compute planogram pixel bboxes ---
@@ -357,7 +338,10 @@ def generate_planogram(
         plt.savefig(output_path, dpi=_SAVE_DPI, bbox_inches='tight', pad_inches=0)
         print(f"  Planogram saved: {output_path}")
 
-        # Compute pixel positions of each cell in the saved image
+        # Compute pixel positions of each cell in the saved image.
+        # Set DPI to _SAVE_DPI before drawing so that ax.transData.transform()
+        # returns coordinates in the same pixel space as the saved PNG.
+        fig.set_dpi(_SAVE_DPI)
         fig.canvas.draw()
         renderer = fig.canvas.get_renderer()
         tight_bbox = fig.get_tightbbox(renderer)

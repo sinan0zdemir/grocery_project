@@ -20,7 +20,7 @@ templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 # Create all output directories at startup
 OUTPUT_DIR = BASE_DIR.parent / "demo_output"
 UPLOAD_DIR = OUTPUT_DIR / "uploads"
-for _d in [UPLOAD_DIR, OUTPUT_DIR / "classification", OUTPUT_DIR / "detection", OUTPUT_DIR / "planogram"]:
+for _d in [UPLOAD_DIR, OUTPUT_DIR / "classification", OUTPUT_DIR / "detection", OUTPUT_DIR / "planogram", OUTPUT_DIR / "compliance"]:
     _d.mkdir(parents=True, exist_ok=True)
 
 @app.get("/", response_class=HTMLResponse)
@@ -92,15 +92,21 @@ async def clear_reference():
     golden = schemas_dir / "golden_schema.json"
     if golden.exists():
         golden.unlink()
-        return JSONResponse(content={"status": "success", "message": "Reference cleared."})
-    return JSONResponse(content={"status": "success", "message": "No reference exists."})
+    ref_img = BASE_DIR.parent / "demo_output" / "reference" / "reference_image.jpg"
+    if ref_img.exists():
+        ref_img.unlink()
+    return JSONResponse(content={"status": "success", "message": "Reference cleared."})
 
 @app.get("/api/check_reference")
 async def check_reference():
     """Check if a golden schema currently exists."""
     schemas_dir = BASE_DIR.parent / "planogram" / "schemas"
     golden = schemas_dir / "golden_schema.json"
-    return JSONResponse(content={"has_reference": golden.exists()})
+    ref_image_url = None
+    ref_img = BASE_DIR.parent / "demo_output" / "reference" / "reference_image.jpg"
+    if ref_img.exists():
+        ref_image_url = "/outputs/reference/reference_image.jpg"
+    return JSONResponse(content={"has_reference": golden.exists(), "ref_image_url": ref_image_url})
 
 # Mount outputs so the frontend can display the processed images
 app.mount("/outputs", StaticFiles(directory=str(BASE_DIR.parent / "demo_output")), name="outputs")

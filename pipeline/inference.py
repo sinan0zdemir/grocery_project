@@ -142,14 +142,14 @@ def run_analysis(image_path: str, schemas_dir: str, output_folder: Path) -> dict
     shelf_lines = detect_shelf_lines(df, img_h)
     df_shelved = assign_shelves(df, shelf_lines)
     
-    # 4. Evaluate using Hybrid Logic (Golden Image + Heuristics)
-    golden_schema_path = Path(schemas_dir) / "golden_schema.json"
+    # 4. Evaluate using Hybrid Logic (Reference Schema + Heuristics)
+    reference_schema_path = Path(schemas_dir) / "reference_schema.json"
     expected_schema = None
-    if golden_schema_path.exists():
+    if reference_schema_path.exists():
         try:
-            expected_schema = load_schema(str(golden_schema_path))
+            expected_schema = load_schema(str(reference_schema_path))
         except Exception as e:
-            print(f"Error loading golden schema: {e}")
+            print(f"Error loading reference schema: {e}")
             
     results = evaluate_hybrid_shelves(df_shelved, expected_schema)
     
@@ -254,7 +254,7 @@ def run_analysis(image_path: str, schemas_dir: str, output_folder: Path) -> dict
     return results
 
 def set_reference_image(image_path: str, schemas_dir: str, output_folder: Path) -> dict:
-    """Processes an image and saves the exact detected layout as the Golden Image."""
+    """Processes an image and saves the exact detected layout as the Reference Schema."""
     initialize_models()
     
     cls_folder = output_folder / "classification"
@@ -333,7 +333,7 @@ def set_reference_image(image_path: str, schemas_dir: str, output_folder: Path) 
     import json
     schemas_path = Path(schemas_dir)
     schemas_path.mkdir(parents=True, exist_ok=True)
-    out_file = schemas_path / "golden_schema.json"
+    out_file = schemas_path / "reference_schema.json"
     
     with open(out_file, "w", encoding="utf-8") as f:
         json.dump(schema, f, ensure_ascii=False, indent=2)

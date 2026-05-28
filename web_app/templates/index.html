@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Planogram AI Dashboard</title>
+    <meta name="description" content="AI-powered planogram compliance analysis for grocery shelves. Upload shelf photos, compare with reference planograms, and detect misplaced or missing products.">
     
     <!-- Google Fonts: Inter -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -25,19 +26,24 @@
             </div>
             
             <nav class="nav-menu">
-                <a href="#" class="nav-item active">
+                <a href="#" class="nav-item active" id="nav-dashboard" data-tab="dashboard">
                     <i data-lucide="layout-dashboard"></i>
                     <span>Dashboard</span>
                 </a>
-                <a href="#" class="nav-item">
+                <a href="#" class="nav-item" id="nav-references" data-tab="references">
+                    <i data-lucide="library"></i>
+                    <span>References</span>
+                    <span class="nav-badge hidden" id="ref-count-badge">0</span>
+                </a>
+                <a href="#" class="nav-item" id="nav-planograms" data-tab="planograms">
                     <i data-lucide="map"></i>
                     <span>Planograms</span>
                 </a>
-                <a href="#" class="nav-item">
+                <a href="#" class="nav-item" id="nav-history" data-tab="history">
                     <i data-lucide="history"></i>
                     <span>History</span>
                 </a>
-                <a href="#" class="nav-item">
+                <a href="#" class="nav-item" id="nav-settings" data-tab="settings">
                     <i data-lucide="settings"></i>
                     <span>Settings</span>
                 </a>
@@ -57,18 +63,48 @@
                 </div>
             </header>
 
-            <div class="content-grid">
-                <!-- Upload Section -->
-                <section class="upload-section card glassmorphism">
-                    <div class="upload-area" id="drop-zone">
-                        <div class="upload-content">
-                            <div class="upload-icon">
-                                <i data-lucide="upload-cloud"></i>
+                <div class="content-grid">
+                    <!-- Upload Section -->
+                    <section class="upload-section card glassmorphism">
+                        <div class="upload-area" id="drop-zone">
+                            <div class="upload-content" id="upload-content">
+                                <div class="upload-icon">
+                                    <i data-lucide="upload-cloud"></i>
+                                </div>
+                                <h3>Drag & drop your shelf image here</h3>
+                                <p>or click to browse your files (JPG, PNG)</p>
+                                <input type="file" id="file-input" accept="image/jpeg, image/png, image/jpg" hidden>
+                                <button class="btn btn-primary" id="browse-btn">Select Image</button>
                             </div>
-                            <h3>Drag & drop your shelf image here</h3>
-                            <p>or click to browse your files (JPG, PNG)</p>
-                            <input type="file" id="file-input" accept="image/jpeg, image/png, image/jpg" hidden>
-                            <button class="btn btn-primary" id="browse-btn">Select Image</button>
+                            <!-- Full-size image preview (no constraining frame) -->
+                            <div class="preview-container hidden" id="preview-container">
+                                <img id="image-preview" src="" alt="Shelf Preview">
+                                <div class="preview-overlay">
+                                    <button class="btn btn-icon" id="remove-img-btn" title="Remove"><i data-lucide="x"></i></button>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="action-bar">
+                            <span id="ref-status-text" class="ref-status-text">Current Reference: None</span>
+                            <button class="btn btn-outline hidden" id="clear-ref-btn" title="Clear Reference Image"><i data-lucide="trash-2"></i></button>
+                            
+                            <button class="btn btn-ref" id="set-ref-btn" disabled>
+                                <i data-lucide="camera"></i>
+                                Save as Reference Image
+                            </button>
+                            <button class="btn btn-success btn-large" id="analyze-btn" disabled>
+                                <i data-lucide="zap"></i>
+                                Analyze Shelf
+                            </button>
+                        </div>
+                    </section>
+
+                    <!-- Results Section (Initially hidden) -->
+                    <section class="results-section card hidden" id="results-section">
+                        <div class="results-header">
+                            <h2>Shelf Analysis Summary</h2>
+                            <span class="badge score-badge" id="score-badge">Detection Complete</span>
                         </div>
                         <div class="preview-container hidden" id="preview-container">
                             <img id="image-preview" src="" alt="Shelf Preview">
@@ -134,6 +170,7 @@
                                 <span class="metric-value" id="misplaced-items">0</span>
                                 <span class="metric-label">Misplaced Products</span>
                             </div>
+                            <!-- Reference cards injected dynamically -->
                         </div>
                         <div class="metric-card warning" onclick="filterIssues('missing')" style="cursor: pointer;" title="Show Empty/Missing Spaces">
                             <div class="metric-icon"><i data-lucide="file-minus-2"></i></div>
@@ -142,16 +179,47 @@
                                 <span class="metric-label">Empty Spaces on Shelf</span>
                             </div>
                         </div>
-                    </div>
-                    
-                    <div class="report-list">
-                        <h3>Detailed Report</h3>
-                        <ul class="issue-list" id="issue-list">
-                            <!-- Dynamic items will be injected here -->
-                            <li class="empty-state">Run analysis to see detailed issues.</li>
-                        </ul>
-                    </div>
-                </section>
+
+                        <!-- Compare Results -->
+                        <section class="results-section card hidden" id="compare-results-section">
+                            <div class="results-header">
+                                <h2>Comparison Results</h2>
+                                <span class="badge score-badge" id="compare-score-badge">Detection Complete</span>
+                            </div>
+                            
+                            <div class="metrics-grid">
+                                <div class="metric-card success" onclick="filterCompareIssues('all')" style="cursor: pointer;" title="Show All Items">
+                                    <div class="metric-icon"><i data-lucide="package"></i></div>
+                                    <div class="metric-data">
+                                        <span class="metric-value" id="compare-total-items">0</span>
+                                        <span class="metric-label">Total Detected Items</span>
+                                    </div>
+                                </div>
+                                <div class="metric-card danger" onclick="filterCompareIssues('misplaced')" style="cursor: pointer;" title="Show Misplaced Items">
+                                    <div class="metric-icon"><i data-lucide="alert-triangle"></i></div>
+                                    <div class="metric-data">
+                                        <span class="metric-value" id="compare-misplaced-items">0</span>
+                                        <span class="metric-label">Misplaced Items</span>
+                                    </div>
+                                </div>
+                                <div class="metric-card warning" onclick="filterCompareIssues('missing')" style="cursor: pointer;" title="Show Missing Spaces">
+                                    <div class="metric-icon"><i data-lucide="file-minus-2"></i></div>
+                                    <div class="metric-data">
+                                        <span class="metric-value" id="compare-missing-items">0</span>
+                                        <span class="metric-label">Empty/Missing Spaces</span>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="report-list">
+                                <h3>Detailed Report</h3>
+                                <ul class="issue-list" id="compare-issue-list">
+                                    <li class="empty-state">Run comparison to see detailed issues.</li>
+                                </ul>
+                            </div>
+                        </section>
+                    </section>
+                </div>
             </div>
             
             <!-- Loading Modal -->

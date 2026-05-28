@@ -65,9 +65,13 @@ EMBEDDING_DIM = 512
 IMG_SIZE = 224
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-# --- WINDOWS PATH FIX ---
-temp = pathlib.PosixPath
-pathlib.PosixPath = pathlib.WindowsPath
+# --- WINDOWS PATH FIX (only apply on Windows) ---
+import platform
+if platform.system() == "Windows":
+    temp = pathlib.PosixPath
+    pathlib.PosixPath = pathlib.WindowsPath
+else:
+    temp = None
 
 
 # =============================================================================
@@ -305,7 +309,7 @@ def process_image(
     # --- Planogram → planogram/ ---
     print(f"  Generating planogram...")
     plan_path = str(plan_folder / f"{base_name}_planogram.png")
-    fig = generate_planogram(
+    fig, _ = generate_planogram(
         df, img_h, img_w,
         image_path=image_path,
         output_path=plan_path,
@@ -438,7 +442,8 @@ def main():
         print(f"  Images processed:        {len(image_paths)}")
         print(f"  Throughput:              {len(image_paths)/total_pipeline_time:.2f} img/s")
 
-    pathlib.PosixPath = temp
+    if temp is not None:
+        pathlib.PosixPath = temp
     print(f"\nDone! Check folder: '{output_folder}'")
 
 

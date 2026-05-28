@@ -39,39 +39,11 @@ app = FastAPI(title="Grocery Planogram Analyzer", lifespan=lifespan)
 app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="static")
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 
-# Define folders
-UPLOAD_DIR = BASE_DIR.parent / "demo_output" / "uploads"
-REFERENCES_DIR = BASE_DIR.parent / "demo_output" / "references"
-REFERENCES_META = REFERENCES_DIR / "references.json"
-
-for d in [UPLOAD_DIR, REFERENCES_DIR]:
-    d.mkdir(parents=True, exist_ok=True)
-
-# --- Helpers ---
-def load_references_meta() -> list:
-    """Load the references metadata list from disk."""
-    if REFERENCES_META.exists():
-        try:
-            with open(REFERENCES_META, "r", encoding="utf-8") as f:
-                return json.load(f)
-        except Exception:
-            return []
-    return []
-
-def save_references_meta(refs: list):
-    """Persist the references metadata list to disk."""
-    with open(REFERENCES_META, "w", encoding="utf-8") as f:
-        json.dump(refs, f, ensure_ascii=False, indent=2)
-
-def get_active_reference() -> dict | None:
-    """Return the currently active reference, or None."""
-    refs = load_references_meta()
-    for r in refs:
-        if r.get("active"):
-            return r
-    return None
-
-# --- Routes ---
+# Create all output directories at startup
+OUTPUT_DIR = BASE_DIR.parent / "demo_output"
+UPLOAD_DIR = OUTPUT_DIR / "uploads"
+for _d in [UPLOAD_DIR, OUTPUT_DIR / "classification", OUTPUT_DIR / "detection", OUTPUT_DIR / "planogram", OUTPUT_DIR / "compliance"]:
+    _d.mkdir(parents=True, exist_ok=True)
 
 @app.get("/", response_class=HTMLResponse)
 async def read_root(request: Request):
@@ -99,8 +71,8 @@ async def analyze_image(file: UploadFile = File(...)):
     # Run the ML pipeline
     try:
         results = run_analysis(str(file_path), str(schemas_dir), output_folder)
-        base_name = file_path.stem
-        results['image_url'] = f"/outputs/planogram/{base_name}_planogram.png"
+        # image_url is set by run_analysis to the planogram image,
+        # with bbox coordinates mapped to planogram pixel positions.
     except Exception as e:
         results = {"status": "error", "message": f"Pipeline failed: {str(e)}"}
         
@@ -209,55 +181,24 @@ async def clear_reference(ref_id: str = Form(None)):
     """Delete a specific reference by ID, or clear the active one if no ID is given."""
     refs = load_references_meta()
     schemas_dir = BASE_DIR.parent / "planogram" / "schemas"
-    ref_schema = schemas_dir / "reference_schema.json"
-    
-    if ref_id:
-        # Delete specific reference
-        target = None
-        new_refs = []
-        for r in refs:
-            if r["id"] == ref_id:
-                target = r
-            else:
-                new_refs.append(r)
-        
-        if target is None:
-            return JSONResponse(content={"status": "error", "message": "Reference not found."})
-        
-        # Delete reference image and schema files
-        ref_image = REFERENCES_DIR / Path(target["image_url"]).name
-        ref_schema = REFERENCES_DIR / target["schema_path"]
-        if ref_image.exists():
-            ref_image.unlink()
-        if ref_schema.exists():
-            ref_schema.unlink()
-        
-        # If it was the active one, remove the reference schema too
-        if target.get("active") and ref_schema.exists():
-            ref_schema.unlink()
-        
-        save_references_meta(new_refs)
-        return JSONResponse(content={"status": "success", "message": f"Reference '{target['name']}' deleted."})
-    else:
-        # Legacy: clear the active reference schema
-        if ref_schema.exists():
-            ref_schema.unlink()
-        # Deactivate all
-        for r in refs:
-            r["active"] = False
-        save_references_meta(refs)
-        return JSONResponse(content={"status": "success", "message": "Active reference cleared."})
+    golden = schemas_dir / "golden_schema.json"
+    if golden.exists():
+        golden.unlink()
+    ref_img = BASE_DIR.parent / "demo_output" / "reference" / "reference_image.jpg"
+    if ref_img.exists():
+        ref_img.unlink()
+    return JSONResponse(content={"status": "success", "message": "Reference cleared."})
 
 @app.get("/api/check_reference")
 async def check_reference():
     """Check if a reference schema currently exists and return info about the active reference."""
     schemas_dir = BASE_DIR.parent / "planogram" / "schemas"
-    ref_schema = schemas_dir / "reference_schema.json"
-    active = get_active_reference()
-    return JSONResponse(content={
-        "has_reference": ref_schema.exists(),
-        "active_reference": active
-    })
+    golden = schemas_dir / "golden_schema.json"
+    ref_image_url = None
+    ref_img = BASE_DIR.parent / "demo_output" / "reference" / "reference_image.jpg"
+    if ref_img.exists():
+        ref_image_url = "/outputs/reference/reference_image.jpg"
+    return JSONResponse(content={"has_reference": golden.exists(), "ref_image_url": ref_image_url})
 
 # Mount outputs so the frontend can display the processed images
 app.mount("/outputs", StaticFiles(directory=str(BASE_DIR.parent / "demo_output")), name="outputs")

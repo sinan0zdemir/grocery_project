@@ -146,8 +146,8 @@ def compare_shelves(detected_df: pd.DataFrame, expected_schema: dict) -> dict:
                     exp_shelves = sorted(list(set(other_shelf_dict[det_base])))
                     shelf_str = " & ".join(map(str, exp_shelves))
                     results["misplaced_items"].append({
-                        "expected_label": f"Belongs on Shelf {shelf_str}",
-                        "detail_msg": f"Belongs on Shelf {shelf_str} compared to Golden Image",
+                        "expected_label": "Different product from reference",
+                        "detail_msg": "Does not match the reference image for this slot",
                         "detected_label": det_item,
                         "expected_shelf": exp_shelves[0],
                         "detected_shelf": shelf_idx + 1,
@@ -158,7 +158,7 @@ def compare_shelves(detected_df: pd.DataFrame, expected_schema: dict) -> dict:
                     # Product not in schema at all → unexpected
                     results["unexpected_items"].append({
                         "label": det_item,
-                        "detail_msg": "Unexpected item compared to Golden Image",
+                        "detail_msg": "Not part of the reference image",
                         "detected_shelf": shelf_idx + 1,
                         "detected_position": idx + 1,
                         "bbox": bbox

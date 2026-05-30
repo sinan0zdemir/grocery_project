@@ -3,178 +3,307 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Planogram AI Dashboard</title>
-    
-    <!-- Google Fonts: Inter -->
+    <title>PlanoAI</title>
+
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    
-    <!-- Lucide Icons -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
+
     <script src="https://unpkg.com/lucide@latest"></script>
-    
-    <link rel="stylesheet" href="/static/css/style.css">
+
+    <link rel="stylesheet" href="/static/css/style.css?v={{ asset_version }}">
 </head>
 <body>
     <div class="app-container">
         <!-- Sidebar -->
         <aside class="sidebar">
             <div class="logo">
-                <i data-lucide="scan-line" class="logo-icon"></i>
-                <h2>PlanoAI</h2>
+                <div class="logo-mark">
+                    <i data-lucide="scan-line"></i>
+                </div>
+                <div class="logo-text">
+                    <h2>PlanoAI</h2>
+                </div>
             </div>
-            
+
             <nav class="nav-menu">
-                <a href="#" class="nav-item active">
-                    <i data-lucide="layout-dashboard"></i>
-                    <span>Dashboard</span>
+                <a href="#" class="nav-item active" data-route="dashboard">
+                    <i data-lucide="scan-search"></i>
+                    <span>Analyze</span>
                 </a>
-                <a href="#" class="nav-item">
-                    <i data-lucide="map"></i>
-                    <span>Planograms</span>
-                </a>
-                <a href="#" class="nav-item">
-                    <i data-lucide="history"></i>
-                    <span>History</span>
-                </a>
-                <a href="#" class="nav-item">
-                    <i data-lucide="settings"></i>
-                    <span>Settings</span>
+                <a href="#" class="nav-item" data-route="references">
+                    <i data-lucide="bookmark"></i>
+                    <span>References</span>
+                    <span class="nav-badge" id="nav-ref-count" style="display:none;">0</span>
                 </a>
             </nav>
-            
+
             <div class="sidebar-footer">
-                <p>v1.0.0 Beta</p>
+                <div class="footer-status" id="footer-status">
+                    <span class="dot dot-idle"></span>
+                    <span>Heuristic mode</span>
+                </div>
+                <p class="version">PlanoAI v1.0</p>
             </div>
         </aside>
 
         <!-- Main Content -->
         <main class="main-content">
-            <header class="header">
-                <div class="header-titles">
-                    <h1>Shelf Analysis</h1>
-                    <p>Upload a store shelf photo to verify planogram compliance.</p>
-                </div>
-            </header>
 
-            <div class="content-grid">
-                <!-- Upload Section -->
-                <section class="upload-section card glassmorphism">
-                    <div class="upload-area" id="drop-zone">
-                        <div class="upload-content">
-                            <div class="upload-icon">
-                                <i data-lucide="upload-cloud"></i>
-                            </div>
-                            <h3>Drag & drop your shelf image here</h3>
-                            <p>or click to browse your files (JPG, PNG)</p>
-                            <input type="file" id="file-input" accept="image/jpeg, image/png, image/jpg" hidden>
-                            <button class="btn btn-primary" id="browse-btn">Select Image</button>
+            <!-- ============ DASHBOARD PAGE ============ -->
+            <section class="page page-dashboard active" id="page-dashboard">
+                <header class="header">
+                    <div class="header-titles">
+                        <h1>Shelf Analysis</h1>
+                        <p>Upload a shelf photo to verify planogram compliance.</p>
+                    </div>
+                    <div class="header-status" id="dash-ref-pill">
+                        <span class="dot dot-idle"></span>
+                        <span class="status-label">No reference</span>
+                    </div>
+                </header>
+
+                <div class="content-grid">
+                    <!-- Active Reference Card (shown when a reference is active) -->
+                    <section class="active-ref-card glassmorphism hidden" id="active-ref-card">
+                        <div class="active-ref-thumb">
+                            <img id="active-ref-img" src="" alt="Active reference">
                         </div>
-                        <div class="preview-container hidden" id="preview-container">
-                            <img id="image-preview" src="" alt="Shelf Preview">
-                            <div class="preview-overlay">
-                                <button class="btn" id="remove-img-btn" style="background:rgba(0,0,0,0.6); border:1px solid rgba(255,255,255,0.2); color:white; font-size:0.8rem; padding:0.4rem 0.85rem; border-radius:8px;">
-                                    <i data-lucide="image-plus"></i> Change Photo
+                        <div class="active-ref-info">
+                            <span class="eyebrow" style="color: var(--success);">Compared Against</span>
+                            <h3 id="active-ref-name">Reference name</h3>
+                            <p id="active-ref-date">Saved recently</p>
+                            <div class="active-ref-actions">
+                                <a href="#references" data-route="references" class="btn btn-ghost">
+                                    <i data-lucide="repeat"></i>
+                                    Change reference
+                                </a>
+                                <button class="btn btn-ghost" id="dash-deactivate-btn">
+                                    <i data-lucide="power-off"></i>
+                                    Deactivate
                                 </button>
                             </div>
                         </div>
-                    </div>
-                    
-                    <div class="action-bar" style="display: flex; gap: 10px; justify-content: flex-end; align-items: center;">
-                        <span id="ref-status-text" style="margin-right: auto; font-size: 0.9rem; color: var(--text-secondary);">Current Reference: None</span>
-                        <button class="btn btn-outline hidden" id="clear-ref-btn" style="padding: 0.5rem 0.85rem; font-size: 0.85rem; color: var(--danger, #e05); border-color: var(--danger, #e05);">Delete Reference Photo</button>
-                        
-                        <button class="btn" id="set-ref-btn" style="background: var(--surface-color); border: 1px solid var(--border-color); color: var(--text-primary);" disabled>
-                            <i data-lucide="camera"></i>
-                            Save as Reference Photo
-                        </button>
-                        <button class="btn btn-success btn-large" id="analyze-btn" disabled>
-                            <i data-lucide="zap"></i>
-                            Analyze Shelf
-                        </button>
-                    </div>
-                </section>
+                    </section>
 
-                <!-- Reference Photo Preview -->
-                <div id="ref-photo-preview" class="card glassmorphism hidden" style="padding: 18px 24px;">
-                    <div style="display:flex; align-items:center; gap:8px; margin-bottom:12px; color:var(--success);">
-                        <i data-lucide="image" style="width:16px;height:16px;"></i>
-                        <span style="font-size:0.9rem; font-weight:600;">Reference Photo</span>
+                    <!-- Upload Section -->
+                    <section class="upload-section card glassmorphism">
+                        <div class="upload-section-label" id="upload-section-label">
+                            <span class="eyebrow">Step 1</span>
+                            <h3>Upload the shelf photo to analyze</h3>
+                        </div>
+                        <div class="upload-area" id="drop-zone">
+                            <div class="upload-content">
+                                <div class="upload-icon">
+                                    <i data-lucide="upload-cloud"></i>
+                                </div>
+                                <h3 id="upload-headline">Drop your shelf photo here</h3>
+                                <p>or click to browse. JPG, PNG up to 20MB</p>
+                                <input type="file" id="file-input" accept="image/jpeg, image/png, image/jpg" hidden>
+                                <button class="btn btn-primary" id="browse-btn">
+                                    <i data-lucide="image-plus"></i>
+                                    Select Image
+                                </button>
+                            </div>
+                            <div class="preview-container hidden" id="preview-container">
+                                <img id="image-preview" src="" alt="Shelf Preview">
+                                <div class="preview-overlay">
+                                    <button class="btn btn-primary" id="replace-img-btn" title="Pick a different photo">
+                                        <i data-lucide="refresh-cw"></i>
+                                        Replace photo
+                                    </button>
+                                    <button class="btn btn-ghost-dark" id="remove-img-btn" title="Remove this photo">
+                                        <i data-lucide="x"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="action-bar">
+                            <div class="ref-state" id="ref-state">
+                                <div class="ref-state-thumb" id="ref-state-thumb">
+                                    <i data-lucide="image-off"></i>
+                                </div>
+                                <div class="ref-state-text">
+                                    <span class="ref-state-label" id="ref-state-label">No active reference</span>
+                                    <span class="ref-state-sub" id="ref-state-sub">Heuristic detection only · <a href="#" data-route="references" class="link">Manage references</a></span>
+                                </div>
+                            </div>
+                            <button class="btn btn-success btn-large" id="analyze-btn" disabled>
+                                <i data-lucide="zap"></i>
+                                Analyze Shelf
+                            </button>
+                        </div>
+                    </section>
+
+                    <!-- Results Section -->
+                    <section class="results-section card glassmorphism hidden" id="results-section">
+                        <div class="results-header">
+                            <h2>Analysis Summary</h2>
+                            <span class="badge score-badge" id="score-badge">Complete</span>
+                        </div>
+
+                        <div id="compliance-section" style="display:none; margin-bottom: 1.75rem;">
+                            <div class="section-label">
+                                <h3>Compliance Overlay</h3>
+                                <span class="hint">Click any product for details</span>
+                            </div>
+                            <div id="compliance-container" class="image-container">
+                                <img id="compliance-image" src="" alt="Compliance Overlay">
+                            </div>
+                        </div>
+
+                        <div class="metrics-grid">
+                            <div class="metric-card success" onclick="filterIssues('all')" title="Show all items">
+                                <div class="metric-icon"><i data-lucide="package"></i></div>
+                                <div class="metric-data">
+                                    <span class="metric-value" id="total-items">0</span>
+                                    <span class="metric-label">Products on Shelf</span>
+                                </div>
+                            </div>
+                            <div class="metric-card danger" onclick="filterIssues('misplaced')" title="Show misplaced items">
+                                <div class="metric-icon"><i data-lucide="alert-triangle"></i></div>
+                                <div class="metric-data">
+                                    <span class="metric-value" id="misplaced-items">0</span>
+                                    <span class="metric-label">Misplaced Products</span>
+                                </div>
+                            </div>
+                            <div class="metric-card warning" onclick="filterIssues('missing')" title="Show empty/missing spaces">
+                                <div class="metric-icon"><i data-lucide="file-minus-2"></i></div>
+                                <div class="metric-data">
+                                    <span class="metric-value" id="missing-items">0</span>
+                                    <span class="metric-label">Empty Spaces</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="report-list">
+                            <div class="section-label">
+                                <h3>Detailed Report</h3>
+                            </div>
+                            <ul class="issue-list" id="issue-list">
+                                <li class="empty-state">Run analysis to see detailed issues.</li>
+                            </ul>
+                        </div>
+                    </section>
+                </div>
+            </section>
+
+            <!-- ============ REFERENCES PAGE ============ -->
+            <section class="page page-references" id="page-references">
+                <header class="header">
+                    <div class="header-titles">
+                        <h1>Reference Photos</h1>
+                        <p>Save shelf layouts and activate one to compare new photos against it.</p>
                     </div>
-                    <img id="ref-photo-img" src="" alt="Reference Photo"
-                         style="max-width:100%; max-height:280px; object-fit:contain; border-radius:8px; display:block; margin:0 auto;">
+                    <button class="btn btn-primary btn-large" id="add-ref-btn">
+                        <i data-lucide="plus"></i>
+                        New Reference
+                    </button>
+                </header>
+
+                <div class="ref-toolbar">
+                    <div class="ref-summary" id="ref-summary">Loading references…</div>
+                    <button class="btn btn-ghost" id="deactivate-all-btn" style="display:none;">
+                        <i data-lucide="power-off"></i>
+                        Deactivate
+                    </button>
                 </div>
 
-                <!-- Results Section (Initially hidden or skeleton) -->
-                <section class="results-section card hidden" id="results-section">
-                    <div class="results-header">
-                        <h2>Shelf Analysis Summary</h2>
-                        <span class="badge score-badge" id="score-badge">Detection Complete</span>
-                    </div>
+                <div class="references-grid" id="references-grid">
+                    <!-- Skeletons / cards injected here -->
+                </div>
 
-                    <!-- Compliance Image -->
-                    <div id="compliance-section" style="display:none; margin-bottom: 1.5rem;">
-                        <h3 style="margin-bottom: 0.75rem; font-size: 1rem; color: var(--text-secondary);">Compliance Overlay <span style="font-size:0.8rem; font-weight:400;">(click on a product to see details)</span></h3>
-                        <div id="compliance-container" style="position: relative; display: inline-block; max-width: 100%;">
-                            <img id="compliance-image" src="" alt="Compliance Overlay" style="display: block; max-height: 65vh; max-width: 100%; width: auto; border-radius: 8px;">
-                        </div>
+                <!-- Empty state -->
+                <div class="references-empty hidden" id="references-empty">
+                    <div class="empty-illustration">
+                        <i data-lucide="bookmark-plus"></i>
                     </div>
+                    <h3>No references yet</h3>
+                    <p>Upload your first shelf photo to build a reference library. Once you activate one, every analysis will be compared against it.</p>
+                    <button class="btn btn-primary" id="empty-add-ref-btn">
+                        <i data-lucide="plus"></i>
+                        Add your first reference
+                    </button>
+                </div>
+            </section>
 
-                    <div class="metrics-grid">
-                        <div class="metric-card success" onclick="filterIssues('all')" style="cursor: pointer;" title="Show All Items">
-                            <div class="metric-icon"><i data-lucide="package"></i></div>
-                            <div class="metric-data">
-                                <span class="metric-value" id="total-items">0</span>
-                                <span class="metric-label">Products on Shelf</span>
-                            </div>
-                        </div>
-                        <div class="metric-card danger" onclick="filterIssues('misplaced')" style="cursor: pointer;" title="Show Misplaced Items">
-                            <div class="metric-icon"><i data-lucide="alert-triangle"></i></div>
-                            <div class="metric-data">
-                                <span class="metric-value" id="misplaced-items">0</span>
-                                <span class="metric-label">Misplaced Products</span>
-                            </div>
-                        </div>
-                        <div class="metric-card warning" onclick="filterIssues('missing')" style="cursor: pointer;" title="Show Empty/Missing Spaces">
-                            <div class="metric-icon"><i data-lucide="file-minus-2"></i></div>
-                            <div class="metric-data">
-                                <span class="metric-value" id="missing-items">0</span>
-                                <span class="metric-label">Empty Spaces on Shelf</span>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div class="report-list">
-                        <h3>Detailed Report</h3>
-                        <ul class="issue-list" id="issue-list">
-                            <!-- Dynamic items will be injected here -->
-                            <li class="empty-state">Run analysis to see detailed issues.</li>
-                        </ul>
-                    </div>
-                </section>
-            </div>
-            
             <!-- Loading Modal -->
             <div class="loading-overlay hidden" id="loading-overlay">
                 <div class="loader-card glassmorphism">
                     <div class="spinner"></div>
-                    <h3 id="loading-title">Analyzing shelf...</h3>
+                    <h3 id="loading-title">Analyzing shelf…</h3>
                     <p id="loading-subtitle">Detecting products and checking shelf layout</p>
                 </div>
             </div>
 
             <!-- Toast Notification -->
-            <div id="toast-container" style="position:fixed; top:1.2rem; right:1.5rem; z-index:9999; display:flex; flex-direction:column; gap:0.5rem; pointer-events:none;"></div>
+            <div id="toast-container"></div>
         </main>
     </div>
 
     <!-- Annotation Popup -->
-    <div id="annotation-popup" style="display:none; position:fixed; z-index:1000; background:var(--card-bg, #1e1e2e); border:1px solid var(--border-color); border-radius:10px; padding:14px 16px 12px; max-width:300px; box-shadow:0 8px 32px rgba(0,0,0,0.35);">
-        <button onclick="document.getElementById('annotation-popup').style.display='none'" style="position:absolute;top:8px;right:10px;background:none;border:none;cursor:pointer;font-size:1.1rem;color:var(--text-secondary);line-height:1;">×</button>
+    <div id="annotation-popup">
+        <button class="popup-close" id="popup-close">×</button>
         <div id="popup-content"></div>
     </div>
 
-    <script src="/static/js/main.js"></script>
+    <!-- New Reference Modal -->
+    <div class="modal-overlay hidden" id="new-ref-modal">
+        <div class="modal glassmorphism">
+            <div class="modal-header">
+                <h2>New reference photo</h2>
+                <button class="icon-btn" id="modal-close-btn"><i data-lucide="x"></i></button>
+            </div>
+            <p class="modal-sub">We'll detect every product in this shelf and store the layout as a schema you can compare against.</p>
+
+            <div class="modal-upload" id="modal-drop-zone">
+                <input type="file" id="modal-file-input" accept="image/jpeg, image/png, image/jpg" hidden>
+                <div class="modal-upload-empty" id="modal-upload-empty">
+                    <div class="upload-icon"><i data-lucide="image-up"></i></div>
+                    <h4>Drop or click to upload a shelf photo</h4>
+                    <p>JPG, PNG · Best results from a straight-on view</p>
+                </div>
+                <div class="modal-upload-preview hidden" id="modal-upload-preview">
+                    <img id="modal-preview-img" alt="Selected reference">
+                    <button class="btn btn-ghost-dark modal-preview-change" id="modal-change-btn">
+                        <i data-lucide="refresh-cw"></i>
+                        Change
+                    </button>
+                </div>
+            </div>
+
+            <div class="form-row">
+                <label for="ref-name-input">Name <span class="optional">(optional)</span></label>
+                <input type="text" id="ref-name-input" placeholder="e.g. Aisle 3 Dairy · Morning layout">
+            </div>
+
+            <div class="modal-actions">
+                <button class="btn btn-ghost" id="modal-cancel-btn">Cancel</button>
+                <button class="btn btn-primary" id="modal-save-btn" disabled>
+                    <i data-lucide="save"></i>
+                    Save reference
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Confirm Dialog -->
+    <div class="modal-overlay hidden" id="confirm-modal">
+        <div class="modal modal-sm glassmorphism">
+            <div class="confirm-icon" id="confirm-icon">
+                <i data-lucide="alert-triangle"></i>
+            </div>
+            <h3 id="confirm-title">Are you sure?</h3>
+            <p id="confirm-message">This action cannot be undone.</p>
+            <div class="modal-actions">
+                <button class="btn btn-ghost" id="confirm-cancel">Cancel</button>
+                <button class="btn btn-danger" id="confirm-ok">Confirm</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/js/main.js?v={{ asset_version }}"></script>
     <script>
         lucide.createIcons();
     </script>

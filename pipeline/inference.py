@@ -253,6 +253,96 @@ def run_analysis(image_path: str, schemas_dir: str, output_folder: Path) -> dict
 
     return results
 
+def build_schema_for_image(image_path: str, schema_out_path: str, output_folder: Path) -> dict:
+    """Process an image and write its planogram schema to schema_out_path.
+
+    Unlike set_reference_image, this does not activate the schema as the global golden_schema.
+    """
+    initialize_models()
+
+    cls_folder = output_folder / "classification"
+    det_folder = output_folder / "detection"
+    plan_folder = output_folder / "planogram"
+    for folder in [cls_folder, det_folder, plan_folder]:
+        folder.mkdir(parents=True, exist_ok=True)
+
+    df, timing = process_image(
+        image_path,
+        _detection_model,
+        _classification_model,
+        _ref_embeddings,
+        _ref_class_names,
+        cls_folder,
+        det_folder,
+        plan_folder
+    )
+
+    if df.empty:
+        return {"status": "error", "message": "No products detected on reference image."}
+
+    csv_path = ROOT_DIR / "datasets" / "migros_dataset_v6" / "Annotations" / "SDP_Product&ID_Dataset_fix.csv"
+    global_mapping = {}
+    if csv_path.exists():
+        try:
+            df_map = pd.read_csv(csv_path, header=None, names=['id', 'name'])
+            for _, row in df_map.iterrows():
+                global_mapping[str(row['id']).strip()] = str(row['name']).strip()
+        except Exception:
+            pass
+
+    def map_from_csv(cls_id):
+        cls_str = str(cls_id)
+        name = global_mapping.get(cls_str)
+        if name:
+            return f"{name} ({cls_str})"
+        return cls_str
+
+    df['predicted_class'] = df['predicted_class'].apply(map_from_csv)
+
+    def compute_iou(row1, row2):
+        x_left = max(row1['x1'], row2['x1'])
+        y_top = max(row1['y1'], row2['y1'])
+        x_right = min(row1['x2'], row2['x2'])
+        y_bottom = min(row1['y2'], row2['y2'])
+        if x_right < x_left or y_bottom < y_top:
+            return 0.0
+        intersection = (x_right - x_left) * (y_bottom - y_top)
+        area1 = (row1['x2'] - row1['x1']) * (row1['y2'] - row1['y1'])
+        area2 = (row2['x2'] - row2['x1']) * (row2['y2'] - row2['y1'])
+        return intersection / float(area1 + area2 - intersection)
+
+    if 'class_confidence' in df.columns:
+        df = df.sort_values('class_confidence', ascending=False).reset_index(drop=True)
+    keep_indices = []
+    for i in range(len(df)):
+        keep = True
+        for j in keep_indices:
+            if compute_iou(df.iloc[i], df.iloc[j]) > 0.6:
+                keep = False
+                break
+        if keep:
+            keep_indices.append(i)
+    df = df.iloc[keep_indices].reset_index(drop=True)
+
+    CONF_THRESHOLD = 0.45
+    if 'class_confidence' in df.columns:
+        df = df[df['class_confidence'] >= CONF_THRESHOLD].reset_index(drop=True)
+
+    img_h = int(df['y2'].max()) + 50
+    shelf_lines = detect_shelf_lines(df, img_h)
+    df_shelved = assign_shelves(df, shelf_lines)
+
+    schema = generate_schema_from_df(df_shelved)
+
+    import json
+    out_path = Path(schema_out_path)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(out_path, "w", encoding="utf-8") as f:
+        json.dump(schema, f, ensure_ascii=False, indent=2)
+
+    return {"status": "success", "message": "Schema built successfully.", "schema_path": str(out_path)}
+
+
 def set_reference_image(image_path: str, schemas_dir: str, output_folder: Path) -> dict:
     """Processes an image and saves the exact detected layout as the Reference Schema."""
     initialize_models()

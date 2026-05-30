@@ -1,0 +1,20 @@
+================================================================================
+OCR HELPED (0 cases) - baseline wrong, reranked correct
+================================================================================
+
+
+================================================================================
+OCR HURT (1 cases) - baseline correct, reranked wrong
+================================================================================
+
+  File: Mutlu Makarna_2.jpg
+  Ground Truth: Mutlu Makarna
+  Baseline Pred: Mutlu Makarna
+  Reranked Pred: Migros Yüksük Makarna 500 G
+  OCR Text: penne 500
+    Migros Yüksük Makarna 500 G: vis=0.842 txt=0.840 combined=1.094
+    Migros Yüksük Makarna 500 G: vis=0.839 txt=0.840 combined=1.091
+    Mutlu Makarna: vis=1.000 txt=0.000 combined=1.000 <--
+    Mutlu Makarna: vis=0.894 txt=0.000 combined=0.894 <--
+    Mutlu Makarna: vis=0.878 txt=0.000 combined=0.878 <--
+

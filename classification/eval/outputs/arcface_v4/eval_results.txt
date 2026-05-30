@@ -1,0 +1,104 @@
+ArcFace v4 Evaluation - Migros v6
+==================================================
+Checkpoint: best_newest.pth
+Test crops: 579
+Training classes: 67
+Reference DB: 70 embeddings
+
+--- Retrieval Metrics ---
+HR@1: 43.87%
+HR@5: 76.51%
+HR@10: 86.36%
+HR@20: 94.13%
+mAP: 58.23%
+
+--- Per-Class Accuracy ---
+  100.0% ( 5/ 5) - Pınar Organik Süt
+  100.0% (14/14) - Coca-Cola Light Pet
+  100.0% ( 1/ 1) - Lipton Ice Tea Şekersiz Şeftali Aromalı Soğuk Çay Kutu 6 x 330 Ml
+  100.0% ( 2/ 2) - Schweppes Tonik Pet 1 L
+  100.0% ( 1/ 1) - Fruko Gazoz Pet L
+  100.0% ( 3/ 3) - Yayla Osmancık Yerli Pirinç 1 Kg
+  100.0% ( 1/ 1) - Anadolu Lezzetleri Karacadağ Pirinci 1 Kg
+  100.0% ( 1/ 1) - Yayla Basmati Pirinç 1 Kg
+  100.0% ( 1/ 1) - Arbella Rafadan Tayfa Sebzeli Makarna 350 G
+   85.7% (18/21) - Nuh'un Ankara Makarna
+   85.7% ( 6/ 7) - Migros Baldo Pirinç Kg
+   83.3% (20/24) - Migros Süt
+   82.4% (103/125) - Coca-Cola Orijinal Tat Pet L
+   78.8% (26/33) - Pepsi Kola L
+   75.0% ( 3/ 4) - Yayla Gönen Baldo Pirinç 1 Kg
+   66.7% ( 2/ 3) - Anadolu Lezzetleri Gönen Baldo Pirinç 1 Kg
+   50.0% ( 1/ 2) - Sprite Limon Aromalı Pet L
+   50.0% ( 2/ 4) - Uludağ Efsane Gazoz 1L ( Pet Şişe )
+   50.0% ( 1/ 2) - Mountain Dew 330 ML
+   50.0% ( 1/ 2) - Migros Tel Şehriye 500 G
+   50.0% ( 1/ 2) - Yayla Kırık Pirinç 1 Kg
+   50.0% ( 1/ 2) - Filiz Sebzeli Burgu Makarna 350 G
+   50.0% ( 1/ 2) - Pastavilla Junior Sevimli Rakamlar 350G
+   46.2% ( 6/13) - Sprite Limon Aromalı Kutu Ml
+   37.5% ( 3/ 8) - Pınar Süt Ml
+   33.3% ( 1/ 3) - Yedigün Portakal L
+   33.3% ( 1/ 3) - Migros Limonata 1 L
+   31.6% ( 6/19) - Pepsi Zero Sugar Kola Pet
+   30.8% ( 8/26) - Fanta Portakal Aromalı Kutu Ml
+   28.6% ( 4/14) - Sek Süt
+   27.3% ( 3/11) - Filiz Makarna
+   14.3% ( 1/ 7) - Lipton Ice Tea Şeftali
+   12.5% ( 1/ 8) - Arbella Makarna
+   11.1% ( 1/ 9) - Mutlu Makarna
+    6.1% ( 3/49) - Coca-Cola Orijinal Tat Kutu Ml
+    5.0% ( 1/20) - Torku Süt
+    0.0% ( 0/11) - Pınar Denge Laktozsuz Süt
+    0.0% ( 0/ 1) - İçim Rahat Laktozsuz Süt Ml
+    0.0% ( 0/ 3) - Tikveşli %18 Yağlı Krema 200 Ml
+    0.0% ( 0/20) - Coca-Cola Zero Sugar Pet
+    0.0% ( 0/21) - Pepsi Kola Kutu 330 Ml
+    0.0% ( 0/ 2) - Lipton Ice Tea Mango
+    0.0% ( 0/ 4) - Fuse Tea Mango Ananas Aromalı Soğuk Çay Kutu 330 ML
+    0.0% ( 0/ 6) - Coca-Cola Light Kutu 250 ML
+    0.0% ( 0/15) - Coca-Cola Zero Sugar Kutu Ml
+    0.0% ( 0/ 1) - Sprite Zero Limon Aromalı Pet 1 L
+    0.0% ( 0/ 1) - Schweppes Zero Tonik Pet 1 L
+    0.0% ( 0/ 2) - Uludağ Efsane Portakal Pet
+    0.0% ( 0/ 1) - "Çamlıca Gazoz 1,5 L"
+    0.0% ( 0/ 3) - Fanta Portakal Aromalı Pet L
+    0.0% ( 0/ 2) - Uludağ Frutti Extra Orman Meyveli Pet 1 L
+    0.0% ( 0/ 1) - Fuse Tea Karpuz Soğuk Çay Pet 1 L
+    0.0% ( 0/ 1) - Fuse Tea Şeftali Soğuk Çay Pet 1 L
+    0.0% ( 0/ 4) - Dimes Moments Sıkma Portakal Suyu Cam 700 Ml
+    0.0% ( 0/ 3) - Cappy Pulpy Portakal 1 L
+    0.0% ( 0/ 2) - Migros Arpa Şehriye 500 G
+    0.0% ( 0/ 1) - Migros Pilavlık İthal Pirinç 1 Kg
+    0.0% ( 0/ 1) - Migros Kırık Pirinç 1Kg
+    0.0% ( 0/ 2) - Migros Jasmine Pirinç 1 Kg
+    0.0% ( 0/ 4) - Migros Yüksük Makarna 500 G
+    0.0% ( 0/ 4) - Migros Burgu Makarna 500 G
+    0.0% ( 0/ 3) - Migros Osmancık Pirinç G
+    0.0% ( 0/ 2) - Migros Uzun İnce Makarna 500 G
+    0.0% ( 0/ 2) - Anadolu Lezzetleri Bafra Yerli Pilavlık Pirinç 1 Kg
+    0.0% ( 0/ 1) - Pastavilla Junior Sebzeli Uzay Serisi 350G
+    0.0% ( 0/ 2) - Arbella Pırıl Sevimli Rakamlar Vitaminli Makarna 350G
+    0.0% ( 0/ 1) - Tat Yasemin Pirinç 1 Kg
+
+--- Top Confused Pairs ---
+  Coca-Cola Orijinal Tat Kutu Ml -> Coca-Cola Orijinal Tat Pet L: 40
+  Pepsi Kola Kutu 330 Ml -> Pepsi Kola L: 20
+  Coca-Cola Orijinal Tat Pet L -> Coca-Cola Light Pet: 17
+  Torku Süt -> Pepsi Kola L: 14
+  Pepsi Zero Sugar Kola Pet -> Pepsi Kola L: 12
+  Fanta Portakal Aromalı Kutu Ml -> Pepsi Zero Sugar Kola Pet: 11
+  Coca-Cola Zero Sugar Pet -> Coca-Cola Light Pet: 10
+  Coca-Cola Zero Sugar Pet -> Coca-Cola Orijinal Tat Pet L: 10
+  Coca-Cola Zero Sugar Kutu Ml -> Coca-Cola Orijinal Tat Pet L: 10
+  Sek Süt -> Pepsi Kola L: 8
+  Pınar Denge Laktozsuz Süt -> Pepsi Zero Sugar Kola Pet: 6
+  Torku Süt -> Pepsi Zero Sugar Kola Pet: 5
+  Coca-Cola Orijinal Tat Pet L -> Coca-Cola Zero Sugar Pet: 5
+  Coca-Cola Light Kutu 250 ML -> Pepsi Zero Sugar Kola Pet: 5
+  Filiz Makarna -> Yayla Basmati Pirinç 1 Kg: 5
+  Coca-Cola Zero Sugar Kutu Ml -> Pepsi Zero Sugar Kola Pet: 4
+  Fanta Portakal Aromalı Kutu Ml -> Coca-Cola Orijinal Tat Pet L: 4
+  Migros Yüksük Makarna 500 G -> Yayla Basmati Pirinç 1 Kg: 4
+  Pınar Denge Laktozsuz Süt -> Fruko Gazoz Pet L: 3
+  Pepsi Kola L -> Coca-Cola Orijinal Tat Pet L: 3

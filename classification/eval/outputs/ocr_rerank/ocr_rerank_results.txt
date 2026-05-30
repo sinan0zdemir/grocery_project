@@ -1,0 +1,18 @@
+ArcFace + Live OCR Reranking - Migros v6
+============================================================
+Total: 580, Top-K: 10
+OCR weight: 0.15, OCR conf: 0.3
+OCR used: 228/580
+
+--- ID Accuracy ---
+Baseline Top-1: 39.14%
+OCR+KNN  Top-1: 39.14%
+Delta: +0.00%
+
+--- Name Accuracy ---
+Baseline Top-1: 100.00%
+OCR+KNN  Top-1: 100.00%
+Delta: +0.00%
+
+ID:   helped=0, hurt=0
+Name: helped=0, hurt=0

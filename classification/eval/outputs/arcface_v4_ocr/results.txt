@@ -1,0 +1,12 @@
+ArcFace v4 + Live OCR - Migros v6
+==================================================
+Checkpoint: best_newest.pth, Epoch: 25
+OCR weight: 0.7, conf: 0.25
+Total: 579, OCR used: 244
+
+HR@1 Baseline: 43.87%  OCR: 51.99%  Delta: +8.12%
+HR@5 Baseline: 76.51%  OCR: 81.69%  Delta: +5.18%
+HR@10 Baseline: 86.36%  OCR: 88.26%  Delta: +1.90%
+HR@20 Baseline: 94.13%  OCR: 94.13%  Delta: +0.00%
+
+Helped: 50, Hurt: 3

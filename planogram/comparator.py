@@ -356,7 +356,7 @@ def evaluate_hybrid_shelves(detected_df: pd.DataFrame, expected_schema: dict = N
     """
     Hybrid evaluation:
     If expected_schema is None -> Use purely heuristic logic.
-    If expected_schema is provided -> Golden Image is the absolute truth for Correct/Missing/Misplaced.
+    If expected_schema is provided -> Reference Schema is the absolute truth for Correct/Missing/Misplaced.
                                       Heuristic logic is strictly DISABLED, except for finding physical gaps.
     """
     heuristic_res = evaluate_shelves_heuristic(detected_df)

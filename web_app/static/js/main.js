@@ -3,7 +3,7 @@
    ============================================================ */
 
 window.filterIssues = function (filterType) {
-    const items = document.querySelectorAll('.issue-item');
+    const items = document.querySelectorAll('#issue-list .issue-item');
     items.forEach(item => {
         if (filterType === 'all' || item.classList.contains(filterType)) {
             item.style.display = 'flex';
@@ -369,7 +369,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const fileInput = document.getElementById('file-input');
     const browseBtn = document.getElementById('browse-btn');
     const previewContainer = document.getElementById('preview-container');
-    const uploadContent = document.querySelector('.upload-content');
+    const uploadContent = document.getElementById('upload-content');
     const imagePreview = document.getElementById('image-preview');
     const removeImgBtn = document.getElementById('remove-img-btn');
     const replaceImgBtn = document.getElementById('replace-img-btn');
@@ -422,6 +422,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         imagePreview.src = '';
         previewContainer.classList.add('hidden');
         uploadContent.classList.remove('hidden');
+        dropZone.classList.remove('has-preview');
         analyzeBtn.disabled = true;
         fileInput.value = '';
     }
@@ -437,6 +438,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             imagePreview.src = e.target.result;
             uploadContent.classList.add('hidden');
             previewContainer.classList.remove('hidden');
+            dropZone.classList.add('has-preview');
             analyzeBtn.disabled = false;
         };
         reader.readAsDataURL(file);
@@ -803,7 +805,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                         Shelf ${item.expected_shelf}
                     </div>
                 `;
-                issueList.appendChild(li);
+                container.appendChild(li);
             });
         }
 
@@ -825,7 +827,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                         </div>
                     </div>
                 `;
-                issueList.appendChild(li);
+                container.appendChild(li);
             });
         }
 
@@ -846,7 +848,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                         Shelf ${item.expected_shelf}
                     </div>
                 `;
-                issueList.appendChild(li);
+                container.appendChild(li);
             });
         }
 

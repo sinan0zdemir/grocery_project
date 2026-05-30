@@ -70,3 +70,7 @@ Thumbs.db
 *.jpeg
 *.png
 *.csv
+
+# Runtime planogram schemas (user state, written by the app)
+/planogram/schemas/reference_schema.json
+/planogram/schemas/golden_schema.json

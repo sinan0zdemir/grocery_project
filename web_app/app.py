@@ -38,7 +38,7 @@ UPLOAD_DIR = OUTPUT_DIR / "uploads"
 REFERENCES_DIR = OUTPUT_DIR / "references"
 SCHEMAS_DIR = BASE_DIR.parent / "planogram" / "schemas"
 REFERENCES_INDEX = REFERENCES_DIR / "references.json"
-GOLDEN_SCHEMA = SCHEMAS_DIR / "golden_schema.json"
+REFERENCE_SCHEMA = SCHEMAS_DIR / "reference_schema.json"
 ACTIVE_REF_IMG = OUTPUT_DIR / "reference" / "reference_image.jpg"
 
 for _d in [UPLOAD_DIR, OUTPUT_DIR / "classification", OUTPUT_DIR / "detection",
@@ -190,7 +190,7 @@ async def activate_reference(ref_id: str):
         raise HTTPException(status_code=400, detail="Schema file missing for this reference.")
 
     SCHEMAS_DIR.mkdir(parents=True, exist_ok=True)
-    shutil.copyfile(src_schema, GOLDEN_SCHEMA)
+    shutil.copyfile(src_schema, REFERENCE_SCHEMA)
 
     # Copy image into active reference slot for preview
     ref_image_relpath = target.get("image_url", "").replace("/outputs/", "")
@@ -213,8 +213,8 @@ async def deactivate_all_references():
     for r in refs:
         r["active"] = False
     _save_refs(refs)
-    if GOLDEN_SCHEMA.exists():
-        GOLDEN_SCHEMA.unlink()
+    if REFERENCE_SCHEMA.exists():
+        REFERENCE_SCHEMA.unlink()
     if ACTIVE_REF_IMG.exists():
         ACTIVE_REF_IMG.unlink()
     return JSONResponse(content={"status": "success"})
@@ -240,8 +240,8 @@ async def delete_reference(ref_id: str):
     _save_refs(refs)
 
     if was_active:
-        if GOLDEN_SCHEMA.exists():
-            GOLDEN_SCHEMA.unlink()
+        if REFERENCE_SCHEMA.exists():
+            REFERENCE_SCHEMA.unlink()
         if ACTIVE_REF_IMG.exists():
             ACTIVE_REF_IMG.unlink()
 
@@ -273,7 +273,7 @@ async def check_reference():
     elif active:
         ref_image_url = active.get("image_url")
     return JSONResponse(content={
-        "has_reference": GOLDEN_SCHEMA.exists(),
+        "has_reference": REFERENCE_SCHEMA.exists(),
         "ref_image_url": ref_image_url,
         "active_reference": active,
     })
